@@ -1,0 +1,9 @@
+static char* sMsg_Login="Login correcto. Bienvenido a Servidor de juego. \r\n";
+static char* sMsg_NoLogin="Login incorrecto. Desconectando... \r\n";
+static char* sMsg_Quit="Gracias por usar el sistema de juego online. \r\n";
+static char* sMsg_ComandoOK="OK \r\n";
+static char* sMsg_ArchivoNoEncontrado="550 Archivo no encontrado. \r\n";
+static char* sMsg_ErrorConexionDatos="Error abriendo conexion de datos. \r\n";
+static char* sMsg_ErrorTransferencia="Error en la transferencia, cerrando conexion \r\n";
+static char* sMsg_ParametroInvalido="Parametro especificado incorrecto \r\n";
+static char* sMsg_ComandoInvalido="Comando no implementado \r\n";

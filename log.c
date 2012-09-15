@@ -41,19 +41,10 @@ void Log(int TipoEvento,FILE *archlog,const char* sMensaje){
                     fprintf(archlog,"Cierre del socket de conexion.\n");
                     break;
             case 6:
-                    fprintf(archlog,"Peticion del archivo %s.\n",sMensaje);
+                    fprintf(archlog,"Jugada %s enviada.\n",sMensaje);
                     break;
-            case 7:
-                    fprintf(archlog,"Archivo %s enviado.\n",sMensaje);
-                    break;
-	    			case 8:
-                    fprintf(archlog,"Archivo %s recibido.\n",sMensaje);    
-                    break;
-            case 9:
-                    fprintf(archlog,"El usuario %s no se conecto correctamente.\n",sMensaje);
-                    break;
-            case 10:
-                    fprintf(archlog,"El usuario %s se conecto al sistema.\n",sMensaje);
+	    			case 7:
+                    fprintf(archlog,"Juegada %s recibida.\n",sMensaje);    
                     break;
             case -1:
                     fprintf(archlog,"%s",sMensaje);
