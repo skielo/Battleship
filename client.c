@@ -7,7 +7,7 @@
 #include <string.h>
 #include <strings.h>
 #include "mensajes.h"
-#include "ftpserver.h"
+#include "client.h"
 #include <ctype.h>
 
 #define BUFSIZE 80
@@ -21,21 +21,23 @@
 #define LOG_CIERRE_SOCKET_ACCEPT 5
 #define LOG_JUGADA_ENVIADA 6
 #define LOG_JUGADA_RECIVIDA 7
+#define LOG_CONEXION_SERVER 1
 
 int main(int argc, char** argv)
 {
   char* sDireccion;
   char* sPuerto;
-  int sockListen,sockClient;
+  int sockListen,sockClient,Descriptor;
   struct sockaddr_in addrListen, addrClient;
   socklen_t clilen;
   pid_t childpid;
   FILE* fConfiguracion;
   FILE* fLog;
-	pthread_t idChild; 
+	char * sCodRespuesta;
+	char sMsgRespuesta[BUFSIZE];
   fLog=ArchivoLog("./client.log");
   fConfiguracion=AbrirArchivo("./client.conf");
-  sockListen=MakeSocket(AF_INET,SOCK_STREAM,0);
+  Descriptor=MakeSocket(AF_INET,SOCK_STREAM,0);
   sDireccion=malloc(80);
   sPuerto=malloc(6);
   if(LeerValor(fConfiguracion,"DIRECCION",sDireccion)==1)
@@ -49,9 +51,9 @@ int main(int argc, char** argv)
     printf("Error al leer el puerto\n");
     exit (EXIT_FAILURE);
   }
-  bzero(&addrListen,sizeof(addrListen));
-  addrListen.sin_family = AF_INET;
-  addrListen.sin_port = htons(atoi(sPuerto));
+  bzero(&addrClient,sizeof(addrClient));
+  addrClient.sin_family = AF_INET;
+  addrClient.sin_port = htons(atoi(sPuerto));
   if(inet_pton(AF_INET,sDireccion,&addrListen.sin_addr) <0)
   {
     perror("inet_pton");
@@ -61,7 +63,7 @@ int main(int argc, char** argv)
   LimpiarCRLF(sDireccion);
 
 
-  if (connect (Descriptor, (struct sockaddr *)&addrClient, sizeof (Direccion)) == -1)
+  if (connect (Descriptor, (struct sockaddr *)&addrClient, sizeof (addrListen)) == -1)
   {
     perror("Connect");
     Log(LOG_MENSAJE_EXTRA,fLog,"Error Estableciendo la Conexion con el Servidor\n");
@@ -73,21 +75,45 @@ int main(int argc, char** argv)
 
   while(1)
   {
-    /*sockClient=AcceptSocket(sockListen,(struct sockaddr*)&addrClient,&clilen);*/
     Log(LOG_CONEXION_SERVER,fLog,"");
     printf("\nConexion con el Servidor aceptada\n-----------------\n");
-		ConexionControl(sockClient,sDireccion,sPuerto,fConfiguracion);
+		prinf("Esperando la confirmacion de login\n
+    if(ReadSocket(Descriptor,sMsgRespuesta,50,0)<0)
+    {
+    	perror("ReadSocket");
+			Log(LOG_MENSAJE_EXTRA,fLog,"Error logeandose al servidor\n");
+			exit (EXIT_FAILURE);
+    }
+    sCodRespuesta=strtok(sMsgRespuesta," ");
+    if(strcmp(sCodRespuesta,"OK")!=0)
+    {
+			Log(LOG_MENSAJE_EXTRA,fLog,"Login: Error en la respuesta de USER\n");
+			exit (EXIT_FAILURE);
+    }
+		prinf("Recibimos la confirmacion de login\n");
+		ControlDeConexion(sockClient,sDireccion,sPuerto,fConfiguracion);
 	}
   fclose(fLog);
   return EXIT_SUCCESS;
 }
 
+/*Limpia el CRLF*/
+void LimpiarCRLF(char *sCadena)
+{
+	char *aux;
+	aux=strchr(sCadena,'\r');
+	if(aux==NULL)
+	 aux=strchr(sCadena,'\n');
+	if(aux != NULL)
+	 aux[0]='\0';
+}
+
 /*Cambia una string a mayuscula*/
 void Mayusculas(char* sCadena)
 {
- int x;
- for(x=0;x<strlen(sCadena);x++)
-  sCadena[x]=toupper(sCadena[x]);
+	int x;
+	for(x=0;x<strlen(sCadena);x++)
+		sCadena[x]=toupper(sCadena[x]);
 }
 
 /*Genera un nuevo puerto para el cliente que ingreso*/
@@ -127,35 +153,18 @@ int EvaluarComando(char* sComando)
   return -1;
 }
 
-int GenerarPuerto(int iPuerto)
-{
-	static int Puerto;
-	if(iPuerto >0)
- 	{
-  	Puerto=iPuerto;
-	  return 0;
- 	}
- 	else
- 	{
-  	Puerto++;
-  	return Puerto;
-	} 
-}
 
-void ConexionControl(int Descriptor,const char* sDireccionIP,const char* sPuerto,FILE* fConfiguracion)
+void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuerto,FILE* fConfiguracion)
 {
 	int bytesRead;
 	char buf[BUFSIZE];
 	char auxbuf[BUFSIZE];
 	char* command, comandito;
 	int codigoComando;
-	int iResultado,iModoPasivo,iTipoTransferencia;
-	int sockDTP;
 
   fclose(fConfiguracion);
   fConfiguracion=AbrirArchivo("./client.conf");
-  iTipoTransferencia=TYPE_ASCII;
-  /*command=malloc(5);*/
+  command=malloc(5);
   comandito=malloc(20);
   while(1)
   {
@@ -163,7 +172,9 @@ void ConexionControl(int Descriptor,const char* sDireccionIP,const char* sPuerto
     scanf("%s",comandito);
     if(strlen(comandito) >0)
     {
+			printf("Por hacer el split del comando..\n");
       command=strtok(comandito," ");
+			printf("el comando es: %s", command);
       codigoComando=EvaluarComando(command);
       switch(codigoComando)
       {

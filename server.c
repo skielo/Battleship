@@ -7,8 +7,9 @@
 #include <string.h>
 #include <strings.h>
 #include "mensajes.h"
-#include "ftpserver.h"
+#include "server.h"
 #include <ctype.h>
+#include <pthread.h>
 
 #define BUFSIZE 80
 #define PUERTO 10001
@@ -27,13 +28,14 @@ int main(int argc, char** argv)
 {
   char* sDireccion;
   char* sPuerto;
-  int sockListen,sockClient;
+  int sockListen,sockClient, iThread;
   struct sockaddr_in addrListen, addrClient;
   socklen_t clilen;
   pid_t childpid;
   FILE* fConfiguracion;
   FILE* fLog;
-	pthread_t idChild; 
+	pthread_t idChild;
+	stParam param; 
   fLog=ArchivoLog("./server.log");
   fConfiguracion=AbrirArchivo("./server.conf");
   sockListen=MakeSocket(AF_INET,SOCK_STREAM,0);
@@ -73,29 +75,34 @@ int main(int argc, char** argv)
     exit (EXIT_FAILURE);
   }
   clilen=sizeof(addrClient);
-  printf("Servidor de juevo V 0.1\n-----------");
+  printf("Servidor de juego V 0.1\n-----------");
   printf("\nEsperando conexiones de clientes en %s:%s\n",sDireccion,sPuerto);
+	printf("--------------------------------------------------------------\n");
   while(1)
   {
+		printf("Esperando nuevas conexiones\n");
     sockClient=AcceptSocket(sockListen,(struct sockaddr*)&addrClient,&clilen);
     Log(LOG_CONEXION_CLIENTE,fLog,"");
     printf("\nConexion entrante aceptada\n-----------------\n");
-    WriteSocket(sockClient,"220 \r\n",strlen("220 \r\n"),0);
-    if((pthread_create (&idChild, NULL, ConexionControl(sockClient,sDireccion,sPuerto,fConfiguracion), NULL);) == 0)
+    WriteSocket(sockClient,"OK \r\n",strlen("OK \r\n"),0);
+		param=ArmarParametros(sockClient,sDireccion,sPuerto,fConfiguracion);
+		iThread = pthread_create(&idChild, NULL, ConexionControl, &param);
+    if(iThread != 0)
     {
+			perror("THREAD");
+      fclose(fConfiguracion);
       fclose(fLog);
       CloseSocket(sockListen);
       break;
     }
-    else
-    {
-			perror("FORK");
-      fclose(fConfiguracion);
-    }
-
   }
   fclose(fLog);
   return EXIT_SUCCESS;
+}
+
+void ComandoInvalido(int sockClient)
+{
+	WriteSocket(sockClient,sMsg_ComandoInvalido,strlen(sMsg_ComandoInvalido),0);
 }
 
 /*Limpia el CRLF*/
@@ -134,25 +141,38 @@ int GenerarPuerto(int iPuerto)
 	}
 }
 
+/*Arma los parametros para iniciar el nuevo thread*/
+stParam ArmarParametros(int sockClient,const char* sDireccionIP,const char* sPuerto,FILE* fConfiguracion)
+{
+	stParam retval;
+	retval.sockClient=sockClient;
+  memset(retval.sPuerto,(unsigned char)sPuerto, 1);
+	retval.sDireccionIP = (char *)malloc(sizeof(sDireccionIP));
+  strcpy(retval.sDireccionIP, sDireccionIP);
+  retval.fConfiguracion=fConfiguracion;
+	return retval;
+}
+
 /*Esta funcion se encarga de manejar la conexion con el cliente, esperando
 comandos desde el mismo y evaluandolos*/
-void * ConexionControl(int sockClient,const char* sDireccionIP,const char* sPuerto,FILE* fConfiguracion)
+void * ConexionControl(void * param)
 {
-int bytesRead;
-char buf[BUFSIZE];
-char auxbuf[BUFSIZE];
-char* command;
-int codigoComando;
-int iResultado;
-int sockDTP;
+	stParam * p = (stParam *)param;
+	int bytesRead;
+	char buf[BUFSIZE];
+	char auxbuf[BUFSIZE];
+	char* command;
+	int codigoComando;
+	int iResultado;
+	int sockDTP;
 
-  fclose(fConfiguracion);
-  fConfiguracion=AbrirArchivo("./ftpserver.conf");
+  fclose(p->fConfiguracion);
+  p->fConfiguracion=AbrirArchivo("./server.conf");
   command=malloc(5);
   while(1)
   {
     bzero(buf,BUFSIZE);
-    bytesRead=ReadSocket(sockClient,buf,BUFSIZE,0);
+    bytesRead=ReadSocket(p->sockClient,buf,BUFSIZE,0);
     if(bytesRead >0)
     {
       LimpiarCRLF(buf);
@@ -168,10 +188,10 @@ int sockDTP;
 				case 3: /*PLAY*/
 							continue;
         case 4: /*QUIT*/
-              Quit(sockClient); /*Salir directamente*/
+              Quit(p->sockClient); /*Salir directamente*/
               return;
         default: /*Comando invalido*/
-              ComandoInvalido(sockClient);
+              ComandoInvalido(p->sockClient);
               break;
       }
     }
