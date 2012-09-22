@@ -1,7 +1,7 @@
-all:   red log configuracion client
+all:  red log configuracion client
 	gcc -Wall server.c funciones_red.o configuracion.o log.o -lpthread -o server
 clean:  
-	rm *.o
+	rm *.o server client
 red:	
 	gcc -Wall -c funciones_red.c
 log:   

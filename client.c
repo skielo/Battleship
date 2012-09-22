@@ -27,10 +27,8 @@ int main(int argc, char** argv)
 {
   char* sDireccion;
   char* sPuerto;
-  int sockListen,sockClient,Descriptor;
+  int Descriptor;
   struct sockaddr_in addrListen, addrClient;
-  socklen_t clilen;
-  pid_t childpid;
   FILE* fConfiguracion;
   FILE* fLog;
 	char * sCodRespuesta;
@@ -69,7 +67,6 @@ int main(int argc, char** argv)
     Log(LOG_MENSAJE_EXTRA,fLog,"Error Estableciendo la Conexion con el Servidor\n");
     exit (EXIT_FAILURE);
   }
-  clilen=sizeof(addrClient);
   printf("Cliente Battleship V 0.1\n-----------");
   printf("\nConectando con el servidor en %s:%s\n",sDireccion,sPuerto);
 
@@ -77,7 +74,7 @@ int main(int argc, char** argv)
   {
     Log(LOG_CONEXION_SERVER,fLog,"");
     printf("\nConexion con el Servidor aceptada\n-----------------\n");
-		prinf("Esperando la confirmacion de login\n
+		printf("Esperando la confirmacion de login\n");
     if(ReadSocket(Descriptor,sMsgRespuesta,50,0)<0)
     {
     	perror("ReadSocket");
@@ -90,8 +87,8 @@ int main(int argc, char** argv)
 			Log(LOG_MENSAJE_EXTRA,fLog,"Login: Error en la respuesta de USER\n");
 			exit (EXIT_FAILURE);
     }
-		prinf("Recibimos la confirmacion de login\n");
-		ControlDeConexion(sockClient,sDireccion,sPuerto,fConfiguracion);
+		printf("Recibimos la confirmacion de login\n");
+		ControlDeConexion(Descriptor,sDireccion,sPuerto,fConfiguracion);
 	}
   fclose(fLog);
   return EXIT_SUCCESS;
@@ -156,36 +153,33 @@ int EvaluarComando(char* sComando)
 
 void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuerto,FILE* fConfiguracion)
 {
-	int bytesRead;
-	char buf[BUFSIZE];
-	char auxbuf[BUFSIZE];
-	char* command, comandito;
+	char* command;
+	char buffer[20];
 	int codigoComando;
 
   fclose(fConfiguracion);
   fConfiguracion=AbrirArchivo("./client.conf");
-  command=malloc(5);
-  comandito=malloc(20);
+  //command=malloc(5);
+  comandito=(char *)malloc(20);
   while(1)
   {
     printf("Jugador>");
-    scanf("%s",comandito);
-    if(strlen(comandito) >0)
+		//scanf("%s",comandito);
+		
+    if(read(0, buffer, 20) >0)
     {
-			printf("Por hacer el split del comando..\n");
-      command=strtok(comandito," ");
-			printf("el comando es: %s", command);
+      command=strtok(buffer," ");
       codigoComando=EvaluarComando(command);
       switch(codigoComando)
       {
         case 1: /*LIST*/
-              command=strtok(comandito," ");
+              command=strtok(buffer," ");
               break;
         case 2: /*GAME*/
-							command=strtok(comandito," ");
+							command=strtok(buffer," ");
               break;
         case 3: /*PLAY*/
-              command=strtok(comandito," ");
+              command=strtok(buffer," ");
               break;
         default: /*Comando invalido*/
               ComandoInvalido();

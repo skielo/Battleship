@@ -31,7 +31,6 @@ int main(int argc, char** argv)
   int sockListen,sockClient, iThread;
   struct sockaddr_in addrListen, addrClient;
   socklen_t clilen;
-  pid_t childpid;
   FILE* fConfiguracion;
   FILE* fLog;
 	pthread_t idChild;
@@ -147,7 +146,7 @@ stParam ArmarParametros(int sockClient,const char* sDireccionIP,const char* sPue
 	stParam retval;
 	retval.sockClient=sockClient;
   memset(retval.sPuerto,(unsigned char)sPuerto, 1);
-	retval.sDireccionIP = (char *)malloc(sizeof(sDireccionIP));
+	retval.sDireccionIP = malloc(sizeof(sDireccionIP));
   strcpy(retval.sDireccionIP, sDireccionIP);
   retval.fConfiguracion=fConfiguracion;
 	return retval;
@@ -160,11 +159,8 @@ void * ConexionControl(void * param)
 	stParam * p = (stParam *)param;
 	int bytesRead;
 	char buf[BUFSIZE];
-	char auxbuf[BUFSIZE];
 	char* command;
 	int codigoComando;
-	int iResultado;
-	int sockDTP;
 
   fclose(p->fConfiguracion);
   p->fConfiguracion=AbrirArchivo("./server.conf");
@@ -189,7 +185,7 @@ void * ConexionControl(void * param)
 							continue;
         case 4: /*QUIT*/
               Quit(p->sockClient); /*Salir directamente*/
-              return;
+              return 0;
         default: /*Comando invalido*/
               ComandoInvalido(p->sockClient);
               break;
