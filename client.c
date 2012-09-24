@@ -27,7 +27,7 @@ int main(int argc, char** argv)
 {
   char* sDireccion;
   char* sPuerto;
-  int Descriptor;
+  int Descriptor, sockClient;
   struct sockaddr_in addrListen, addrClient;
   FILE* fConfiguracion;
   FILE* fLog;
@@ -36,6 +36,7 @@ int main(int argc, char** argv)
   fLog=ArchivoLog("./client.log");
   fConfiguracion=AbrirArchivo("./client.conf");
   Descriptor=MakeSocket(AF_INET,SOCK_STREAM,0);
+	sockClient=MakeSocket(AF_INET,SOCK_STREAM,0);
   sDireccion=malloc(80);
   sPuerto=malloc(6);
   if(LeerValor(fConfiguracion,"DIRECCION",sDireccion)==1)
@@ -49,47 +50,63 @@ int main(int argc, char** argv)
     printf("Error al leer el puerto\n");
     exit (EXIT_FAILURE);
   }
+
+	//Me conecto con el puerto original de escucha del server
   bzero(&addrClient,sizeof(addrClient));
   addrClient.sin_family = AF_INET;
   addrClient.sin_port = htons(atoi(sPuerto));
-  if(inet_pton(AF_INET,sDireccion,&addrListen.sin_addr) <0)
+  if(inet_pton(AF_INET,sDireccion,&addrClient.sin_addr) <0)
   {
     perror("inet_pton");
     exit (EXIT_FAILURE);
   }
-  GenerarPuerto(atoi(sPuerto));
   LimpiarCRLF(sDireccion);
 
-
-  if (connect (Descriptor, (struct sockaddr *)&addrClient, sizeof (addrListen)) == -1)
+  if (connect (Descriptor, (struct sockaddr *)&addrClient, sizeof (addrClient)) == -1)
   {
     perror("Connect");
     Log(LOG_MENSAJE_EXTRA,fLog,"Error Estableciendo la Conexion con el Servidor\n");
     exit (EXIT_FAILURE);
   }
+
   printf("Cliente Battleship V 0.1\n-----------");
   printf("\nConectando con el servidor en %s:%s\n",sDireccion,sPuerto);
 
-  while(1)
+  Log(LOG_CONEXION_SERVER,fLog,"");
+  printf("\nConexion con el Servidor aceptada\n-----------------\n");
+  if(ReadSocket(Descriptor,sMsgRespuesta,50,0)<0)
   {
-    Log(LOG_CONEXION_SERVER,fLog,"");
-    printf("\nConexion con el Servidor aceptada\n-----------------\n");
-		printf("Esperando la confirmacion de login\n");
-    if(ReadSocket(Descriptor,sMsgRespuesta,50,0)<0)
-    {
-    	perror("ReadSocket");
-			Log(LOG_MENSAJE_EXTRA,fLog,"Error logeandose al servidor\n");
-			exit (EXIT_FAILURE);
-    }
-    sCodRespuesta=strtok(sMsgRespuesta," ");
-    if(strcmp(sCodRespuesta,"OK")!=0)
-    {
-			Log(LOG_MENSAJE_EXTRA,fLog,"Login: Error en la respuesta de USER\n");
-			exit (EXIT_FAILURE);
-    }
-		printf("Recibimos la confirmacion de login\n");
-		ControlDeConexion(Descriptor,sDireccion,sPuerto,fConfiguracion);
+  	perror("ReadSocket");
+		Log(LOG_MENSAJE_EXTRA,fLog,"Error logeandose al servidor\n");
+		exit (EXIT_FAILURE);
+  }
+  sCodRespuesta=strtok(sMsgRespuesta," ");
+  if(strcmp(sCodRespuesta,"OK")!=0)
+  {
+		Log(LOG_MENSAJE_EXTRA,fLog,"Login: Error en la respuesta de USER\n");
+		exit (EXIT_FAILURE);
+  }
+	CloseSocket(Descriptor);
+	sCodRespuesta=strtok(NULL," ");
+	printf("Cambiando a la conexion de control en el puerto: %s\n",sCodRespuesta);
+	
+  bzero(&addrListen,sizeof(addrListen));
+  addrListen.sin_family = AF_INET;
+  addrListen.sin_port = htons(atoi(sCodRespuesta));
+  if(inet_pton(AF_INET,sDireccion,&addrListen.sin_addr) <0)
+  {
+    perror("inet_pton");
+    exit (EXIT_FAILURE);
+  }
+	if (connect (sockClient, (struct sockaddr *)&addrListen, sizeof (addrListen)) == -1)
+	{
+	  perror("Connect");
+	  Log(LOG_MENSAJE_EXTRA,fLog,"Error Estableciendo la Conexion con el Servidor\n");
+	  exit (EXIT_FAILURE);
 	}
+	
+	ControlDeConexion(sockClient,sDireccion,sCodRespuesta,fConfiguracion);
+
   fclose(fLog);
   return EXIT_SUCCESS;
 }
@@ -159,13 +176,10 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuer
 
   fclose(fConfiguracion);
   fConfiguracion=AbrirArchivo("./client.conf");
-  //command=malloc(5);
-  comandito=(char *)malloc(20);
+	
   while(1)
   {
-    printf("Jugador>");
-		//scanf("%s",comandito);
-		
+		write(1, "Jugador>", strlen("Jugador>"));
     if(read(0, buffer, 20) >0)
     {
       command=strtok(buffer," ");
@@ -173,13 +187,13 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuer
       switch(codigoComando)
       {
         case 1: /*LIST*/
-              command=strtok(buffer," ");
+              command=strtok(NULL," ");
               break;
         case 2: /*GAME*/
-							command=strtok(buffer," ");
+							command=strtok(NULL," ");
               break;
         case 3: /*PLAY*/
-              command=strtok(buffer," ");
+              command=strtok(NULL," ");
               break;
         default: /*Comando invalido*/
               ComandoInvalido();
