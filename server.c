@@ -29,7 +29,7 @@ int main(int argc, char** argv)
   char* sDireccion;
   char* sPuerto;
 	char sNum[5];
-	char sCommonAnswer[10] = "OK ";
+	char sCommonAnswer[10] = "OK \r\n";
   int sockListen,sockClient,sockClientNew, iThread, iPort;
   struct sockaddr_in addrListen, addrClient;
   socklen_t clilen;
@@ -81,19 +81,23 @@ int main(int argc, char** argv)
 	printf("--------------------------------------------------------------\n");
   while(1)
   {
+		fflush(stdout);
 		printf("Esperando nuevas conexiones\n");
+		printf("Esperando en el socket: %d",sockListen);
     sockClient=AcceptSocket(sockListen,(struct sockaddr*)&addrClient,&clilen);
     Log(LOG_CONEXION_CLIENTE,fLog,"");
     printf("\nConexion entrante aceptada\n-----------------\n");
+/*
 		//Generamos el nuevo puesto de escucha
 	  iPort=GenerarPuerto(-1);
 		itoa(iPort, sNum);
 		strcat(sCommonAnswer,sNum);
 		strcat(sCommonAnswer," \r\n");
 		//printf("%s\n",sCommonAnswer);
-
+*/
 		//Enviamos la confirmacion al cliente y le decimos donde debe conectarse
     WriteSocket(sockClient,sCommonAnswer,strlen(sCommonAnswer),0);
+/*
 		//Ingresar la funcion que hace el llamado
 		sockClientNew=CrearConexionControl(iPort, sDireccion, fLog);
 		printf("La nueva conexion es el socket: %d\n",sockClientNew);
@@ -101,7 +105,8 @@ int main(int argc, char** argv)
 
 		itoa(iPort, sNum);
 		printf("socket: %d, ip: %s, puerto: %s\n",sockClientNew, sDireccion, sNum);
-		param=ArmarParametros(sockClientNew,sDireccion,sNum,fConfiguracion);
+*/
+		param=ArmarParametros(sockClient,sDireccion,sPuerto,fConfiguracion);
 		iThread = pthread_create(&idChild, NULL, ConexionControl, &param);
 		printf("nuevo thread creado\n");
     if(iThread != 0)
@@ -112,6 +117,8 @@ int main(int argc, char** argv)
       CloseSocket(sockListen);
       break;
     }
+		LimpiarAnswer(sCommonAnswer);
+		//printf("despues de limpiar: %s\n",sCommonAnswer);
   }
   fclose(fLog);
   return EXIT_SUCCESS;
@@ -131,6 +138,13 @@ void LimpiarCRLF(char *sCadena)
 	 aux=strchr(sCadena,'\n');
 	if(aux != NULL)
 	 aux[0]='\0';
+}
+
+void LimpiarAnswer(char * answer)
+{
+	int x;
+	for(x=3;x<strlen(answer);x++)
+		answer[x]=NULL;
 }
 
 /*Cambia una string a mayuscula*/
@@ -190,7 +204,7 @@ void reverse(char s[])
 /*Arma los parametros para iniciar el nuevo thread*/
 stParam ArmarParametros(int sockClient,char* sDireccionIP,char* sPuerto,FILE* fConfiguracion)
 {
-	printf("socket: %d, ip: %s, puerto: %s\n",sockClient, sDireccionIP, sPuerto);
+	//printf("socket: %d, ip: %s, puerto: %s\n",sockClient, sDireccionIP, sPuerto);
 	stParam retval;
 	retval.sockClient=sockClient;
   memset(retval.sPuerto,(unsigned char)sPuerto, 1);
@@ -236,6 +250,10 @@ int CrearConexionControl(int iPort, char * sDireccion, FILE* fLog)
 	return AcceptSocket(sockListenNew,(struct sockaddr*)&addrClientNew,&client);
 }
 
+// BindSocket: Address already in use
+// socket servidor seterarle un flag SO_REUSEADDR setsockopt
+
+
 /*Esta funcion se encarga de manejar la conexion con el cliente, esperando
 comandos desde el mismo y evaluandolos*/
 void * ConexionControl(void * param)
@@ -246,18 +264,19 @@ void * ConexionControl(void * param)
 	char* command;
 	int codigoComando;
 
-  fclose(p->fConfiguracion);
-  p->fConfiguracion=AbrirArchivo("./server.conf");
+  //fclose(p->fConfiguracion);
+  //p->fConfiguracion=AbrirArchivo("./server.conf");
   command=malloc(5);
   while(1)
   {
+		fflush(stdout);
     bzero(buf,BUFSIZE);
     bytesRead=ReadSocket(p->sockClient,buf,BUFSIZE,0);
     if(bytesRead >0)
     {
       LimpiarCRLF(buf);
       command=strtok(buf," ");
-      printf("Comando: %s \n",buf);
+			printf("Comando: %s \n", command);
       codigoComando=EvaluarComando(command);
       switch(codigoComando)
       {

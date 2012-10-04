@@ -86,6 +86,7 @@ int main(int argc, char** argv)
 		Log(LOG_MENSAJE_EXTRA,fLog,"Login: Error en la respuesta de USER\n");
 		exit (EXIT_FAILURE);
   }
+/*
 	CloseSocket(Descriptor);
 	sCodRespuesta=strtok(NULL," ");
 	printf("Cambiando a la conexion de control en el puerto: %s\n",sCodRespuesta);
@@ -104,7 +105,7 @@ int main(int argc, char** argv)
 	  Log(LOG_MENSAJE_EXTRA,fLog,"Error Estableciendo la Conexion con el Servidor\n");
 	  exit (EXIT_FAILURE);
 	}
-	
+*/	
 	ControlDeConexion(sockClient,sDireccion,sCodRespuesta,fConfiguracion);
 
   fclose(fLog);
@@ -149,12 +150,17 @@ int GenerarPuerto(int iPuerto)
 
 void ComandoInvalido(void)
 {
+	fflush(stdout);
 	printf("Comando no implementado, por favor reintentarlo\n");
 }
 
 int EvaluarComando(char* sComando)
 {
+	//write(1,sComando, strlen(sComando));
+	//printf("antes: %s\n",sComando );
   Mayusculas(sComando);
+	//write(1,sComando, strlen(sComando));
+	//printf("despues: %s\n",sComando );
   if(strcmp(sComando,"LIST")==0)
     return 1;
 
@@ -179,20 +185,26 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuer
 	
   while(1)
   {
-		write(1, "Jugador>", strlen("Jugador>"));
-    if(read(0, buffer, 20) >0)
+		fflush(stdout);
+		fflush(stdin);
+		printf("Jugador>");
+		gets(buffer);
+    if(buffer >0)
     {
       command=strtok(buffer," ");
       codigoComando=EvaluarComando(command);
       switch(codigoComando)
       {
         case 1: /*LIST*/
+							printf("Queres listar los usuarios\n");
               command=strtok(NULL," ");
               break;
         case 2: /*GAME*/
+							printf("Queres mostrar el juego\n");
 							command=strtok(NULL," ");
               break;
         case 3: /*PLAY*/
+							printf("Queres jugar con X\n");
               command=strtok(NULL," ");
               break;
         default: /*Comando invalido*/

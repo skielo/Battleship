@@ -18,3 +18,4 @@ void ComandoInvalido(int );
 void itoa(int , char[]);
 void reverse(char []);
 int CrearConexionControl(int , char *, FILE* );
+void LimpiarAnswer(char * );
