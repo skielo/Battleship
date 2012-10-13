@@ -15,8 +15,8 @@
 /*Estructura de un Cliente*/
 typedef struct Client{
   char * sNombre;
-	int iBoatTable[10][10];		
-	int iPlayTable[10][10];	
+	char iBoatTable[10][10];		
+	char iPlayTable[10][10];	
 }stClient;
 /*Estructura de la lista de Conexiones*/
 typedef struct sNodoListas{
@@ -37,10 +37,10 @@ typedef NODOListas * ListasNodos;
 typedef NODOClient * LISTACLIENT;
 typedef NODOClient * ListasClient;
 
-stClient MakeClient(char *, char[][10],  FILE *);
+stClient MakeClient(char *, char[][NUMBER_Y],  FILE *);
 int ReadClient(FILE *, stClient * ,LISTACLIENT * , int );
+void matrix_init(char [][NUMBER_Y],stClient*);
 /*
-void matrix_init();
 void print_map_line(char[]);
 void print_header() ;
 void print_maps();

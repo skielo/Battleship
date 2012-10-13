@@ -3,17 +3,22 @@
 #include <stdlib.h>
 
 int i,j;
-/*
-void matrix_init(char my_matrix[][NUMBER_Y], char remote_matrix[][NUMBER_Y])
+
+void matrix_init(char my_matrix[][NUMBER_Y], stClient * client)
 {
 	for(i=0;i<NUMBER_X;i++) {
 		for(j=0;j<NUMBER_Y;j++) {
-			my_matrix[i][j] = 'a';
-			remote_matrix[i][j] = 'a';
+			client->iBoatTable[i][j] = 'a';
+			client->iPlayTable[i][j] = 'a';
 		}
 	}
+	
+	for(i=2;i<=6;i++)
+	{
+		client->iBoatTable[atoi(my_matrix[i][0])][atoi(my_matrix[i][1])] = 'x';
+	}
 }
-
+/*
 void print_map_line(char value[])
 {
 	printf("| ");
@@ -57,19 +62,21 @@ void print_maps()
 */
 stClient MakeClient(char * nombre, char boatTable[][10],  FILE *fLog)
 {
-    stClient retval;
-		retval.sNombre=nombre;
+  stClient retval;
+	retval.sNombre=nombre;
+/*
 		for(i=0;i<10;i++)
 		{
 			for(j=0;j<10;j++)
 			{
-				retval.iBoatTable[i][j]=atoi(boatTable[i][j]);
+				retval.iBoatTable[i][j]=boatTable[i][j];
 			}
 		}
-    
-    Log(LOG_MENSAJE_EXTRA,fLog,"Nueva estructura cliente creada");
-    
-    return retval;
+ */
+	matrix_init(boatTable,&retval);	   
+  Log(LOG_MENSAJE_EXTRA,fLog,"Nueva estructura cliente creada");
+  
+  return retval;
 }
 
 int ReadClient(FILE *fLog, stClient * client,LISTACLIENT * Lista, int iSocket)
