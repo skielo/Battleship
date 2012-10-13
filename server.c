@@ -28,9 +28,8 @@ int main(int argc, char** argv)
 {
   char* sDireccion;
   char* sPuerto;
-	char sNum[5];
 	char sCommonAnswer[10] = "OK \r\n";
-  int sockListen,sockClient,sockClientNew, iThread, iPort;
+  int sockListen,sockClient,iThread;
   struct sockaddr_in addrListen, addrClient;
   socklen_t clilen;
   FILE* fConfiguracion;
@@ -83,32 +82,16 @@ int main(int argc, char** argv)
   {
 		fflush(stdout);
 		printf("Esperando nuevas conexiones\n");
-		printf("Esperando en el socket: %d",sockListen);
     sockClient=AcceptSocket(sockListen,(struct sockaddr*)&addrClient,&clilen);
     Log(LOG_CONEXION_CLIENTE,fLog,"");
     printf("\nConexion entrante aceptada\n-----------------\n");
-/*
-		//Generamos el nuevo puesto de escucha
-	  iPort=GenerarPuerto(-1);
-		itoa(iPort, sNum);
-		strcat(sCommonAnswer,sNum);
-		strcat(sCommonAnswer," \r\n");
-		//printf("%s\n",sCommonAnswer);
-*/
+
 		//Enviamos la confirmacion al cliente y le decimos donde debe conectarse
     WriteSocket(sockClient,sCommonAnswer,strlen(sCommonAnswer),0);
-/*
-		//Ingresar la funcion que hace el llamado
-		sockClientNew=CrearConexionControl(iPort, sDireccion, fLog);
-		printf("La nueva conexion es el socket: %d\n",sockClientNew);
-		CloseSocket(sockClient);
 
-		itoa(iPort, sNum);
-		printf("socket: %d, ip: %s, puerto: %s\n",sockClientNew, sDireccion, sNum);
-*/
-		param=ArmarParametros(sockClient,sDireccion,sPuerto,fConfiguracion);
+		param=ArmarParametros(sockClient,sDireccion,sPuerto);
 		iThread = pthread_create(&idChild, NULL, ConexionControl, &param);
-		printf("nuevo thread creado\n");
+
     if(iThread != 0)
     {
 			perror("THREAD");
@@ -117,8 +100,6 @@ int main(int argc, char** argv)
       CloseSocket(sockListen);
       break;
     }
-		LimpiarAnswer(sCommonAnswer);
-		//printf("despues de limpiar: %s\n",sCommonAnswer);
   }
   fclose(fLog);
   return EXIT_SUCCESS;
@@ -140,12 +121,6 @@ void LimpiarCRLF(char *sCadena)
 	 aux[0]='\0';
 }
 
-void LimpiarAnswer(char * answer)
-{
-	int x;
-	for(x=3;x<strlen(answer);x++)
-		answer[x]=NULL;
-}
 
 /*Cambia una string a mayuscula*/
 void Mayusculas(char* sCadena)
@@ -172,37 +147,9 @@ int GenerarPuerto(int iPuerto)
 	}
 }
 
-void itoa(int n, char s[])
-{
-     int i, sign;
-
-     if ((sign = n) < 0)
-         n = -n;         
-     i = 0;
-     do {       
-         s[i++] = n % 10 + '0';
-     } while ((n /= 10) > 0); 
-     if (sign < 0)
-         s[i++] = '-';
-     s[i] = '\0';
-     reverse(s);
-}
-
-void reverse(char s[])
-{
-     int i, j;
-     char c;
-
-     for (i = 0, j = strlen(s)-1; i<j; i++, j--) {
-         c = s[i];
-         s[i] = s[j];
-         s[j] = c;
-     }
-}
-
 
 /*Arma los parametros para iniciar el nuevo thread*/
-stParam ArmarParametros(int sockClient,char* sDireccionIP,char* sPuerto,FILE* fConfiguracion)
+stParam ArmarParametros(int sockClient,char* sDireccionIP,char* sPuerto)
 {
 	//printf("socket: %d, ip: %s, puerto: %s\n",sockClient, sDireccionIP, sPuerto);
 	stParam retval;
@@ -210,44 +157,7 @@ stParam ArmarParametros(int sockClient,char* sDireccionIP,char* sPuerto,FILE* fC
   memset(retval.sPuerto,(unsigned char)sPuerto, 1);
 	retval.sDireccionIP = malloc(sizeof(sDireccionIP));
   strcpy(retval.sDireccionIP, sDireccionIP);
-  retval.fConfiguracion=fConfiguracion;
 	return retval;
-}
-
-int CrearConexionControl(int iPort, char * sDireccion, FILE* fLog)
-{
-	int retval,sockListenNew;
-	struct sockaddr_in addrListenNew, addrClientNew;
-	socklen_t client;
-
-	//Generamos el nuevo socket de escucha
-	sockListenNew=MakeSocket(AF_INET,SOCK_STREAM,0);
-	bzero(&addrListenNew,sizeof(addrListenNew));
-	addrListenNew.sin_family = AF_INET;
-	addrListenNew.sin_port = htons(iPort);
-
-	if(inet_pton(AF_INET,sDireccion,&addrListenNew.sin_addr) <0)
-	{
-	  perror("inet_pton");
-	  exit (EXIT_FAILURE);
-	}
-	LimpiarCRLF(sDireccion);
-
-	if(BindSocket(sockListenNew,(struct sockaddr*)&addrListenNew,sizeof(addrListenNew)) < 0)
-	{
-	  perror("BindSocket");
-	  Log(LOG_MENSAJE_EXTRA,fLog,"Error Estableciendo la Conexion de Escucha\n");
-	  exit (EXIT_FAILURE);
-	}
-
-	if(ListenSocket(sockListenNew,10)<0)
-	{
-	  perror("ListenSocket");
-	  Log(LOG_MENSAJE_EXTRA,fLog,"Error Escuchando En La Conexion\n");
-	  exit (EXIT_FAILURE);
-	}
-	client=sizeof(addrClientNew);
-	return AcceptSocket(sockListenNew,(struct sockaddr*)&addrClientNew,&client);
 }
 
 // BindSocket: Address already in use
@@ -264,8 +174,6 @@ void * ConexionControl(void * param)
 	char* command;
 	int codigoComando;
 
-  //fclose(p->fConfiguracion);
-  //p->fConfiguracion=AbrirArchivo("./server.conf");
   command=malloc(5);
   while(1)
   {

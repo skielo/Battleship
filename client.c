@@ -1,7 +1,7 @@
 #include "log.h"
 #include "configuracion.h"
 #include "funciones_red.h"
-#include "log.h"
+#include "user.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,6 +39,15 @@ int main(int argc, char** argv)
 	sockClient=MakeSocket(AF_INET,SOCK_STREAM,0);
   sDireccion=malloc(80);
   sPuerto=malloc(6);
+
+	if(argc != 3)
+	{
+		printf("%s",sMsg_ParametroInvalido);
+		exit (EXIT_SUCCESS);
+	}
+
+	stClient this = MakeClient(argv[1], argv[2],  fConfiguracion);
+
   if(LeerValor(fConfiguracion,"DIRECCION",sDireccion)==1)
   {
     printf("Error al leer la direccion\n");
@@ -65,7 +74,7 @@ int main(int argc, char** argv)
   if (connect (Descriptor, (struct sockaddr *)&addrClient, sizeof (addrClient)) == -1)
   {
     perror("Connect");
-    Log(LOG_MENSAJE_EXTRA,fLog,"Error Estableciendo la Conexion con el Servidor\n");
+    Log(LOG_MENSAJE_EXTRA,fLog,sMsg_ErrorConexionDatos);
     exit (EXIT_FAILURE);
   }
 
@@ -86,26 +95,7 @@ int main(int argc, char** argv)
 		Log(LOG_MENSAJE_EXTRA,fLog,"Login: Error en la respuesta de USER\n");
 		exit (EXIT_FAILURE);
   }
-/*
-	CloseSocket(Descriptor);
-	sCodRespuesta=strtok(NULL," ");
-	printf("Cambiando a la conexion de control en el puerto: %s\n",sCodRespuesta);
-	
-  bzero(&addrListen,sizeof(addrListen));
-  addrListen.sin_family = AF_INET;
-  addrListen.sin_port = htons(atoi(sCodRespuesta));
-  if(inet_pton(AF_INET,sDireccion,&addrListen.sin_addr) <0)
-  {
-    perror("inet_pton");
-    exit (EXIT_FAILURE);
-  }
-	if (connect (sockClient, (struct sockaddr *)&addrListen, sizeof (addrListen)) == -1)
-	{
-	  perror("Connect");
-	  Log(LOG_MENSAJE_EXTRA,fLog,"Error Estableciendo la Conexion con el Servidor\n");
-	  exit (EXIT_FAILURE);
-	}
-*/	
+
 	ControlDeConexion(sockClient,sDireccion,sCodRespuesta,fConfiguracion);
 
   fclose(fLog);
@@ -151,16 +141,13 @@ int GenerarPuerto(int iPuerto)
 void ComandoInvalido(void)
 {
 	fflush(stdout);
-	printf("Comando no implementado, por favor reintentarlo\n");
+	printf("%s",sMsg_ComandoInvalido);
 }
 
 int EvaluarComando(char* sComando)
 {
-	//write(1,sComando, strlen(sComando));
-	//printf("antes: %s\n",sComando );
   Mayusculas(sComando);
-	//write(1,sComando, strlen(sComando));
-	//printf("despues: %s\n",sComando );
+
   if(strcmp(sComando,"LIST")==0)
     return 1;
 
@@ -169,6 +156,8 @@ int EvaluarComando(char* sComando)
 
   if(strcmp(sComando,"PLAY")==0)
     return 3;
+	if(strcmp(sComando,"QUIT")==0)
+		return 4;
 
   return -1;
 }
@@ -207,6 +196,10 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuer
 							printf("Queres jugar con X\n");
               command=strtok(NULL," ");
               break;
+				case 4: /*QUIT*/
+							printf("%s",sMsg_Quit);
+							CloseSocket(Descriptor);
+							exit (EXIT_SUCCESS);
         default: /*Comando invalido*/
               ComandoInvalido();
               break;
