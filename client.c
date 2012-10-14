@@ -2,12 +2,13 @@
 #include "configuracion.h"
 #include "funciones_red.h"
 #include "user.h"
+#include "mensajes.h"
+#include "client.h"
+#include "funciones_print.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include "mensajes.h"
-#include "client.h"
 #include <ctype.h>
 
 #define BUFSIZE 80
@@ -40,13 +41,17 @@ int main(int argc, char** argv)
   sDireccion=malloc(80);
   sPuerto=malloc(6);
 
-	if(argc != 3)
+	if(argc != 7)
 	{
 		printf("%s",sMsg_ParametroInvalido);
 		exit (EXIT_SUCCESS);
 	}
 
-	stClient this = MakeClient(argv[1], argv[2],  fConfiguracion);
+	printf("Mostrando el tablero de %s:\n", argv[1]);
+
+
+	stClient this = MakeClient(argv[1], argv[2],fLog);
+	print_maps(this.iBoatTable,this.iPlayTable);
 
   if(LeerValor(fConfiguracion,"DIRECCION",sDireccion)==1)
   {

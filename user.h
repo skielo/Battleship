@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #define LOG_MENSAJE_EXTRA -1
 #define LOG_CONEXION_CLIENTE 1
 #define LOG_COMANDO_CLIENTE 2
@@ -10,13 +12,12 @@
 
 #define NUMBER_X 10
 #define NUMBER_Y 10
-#define VALUE 48
 
 /*Estructura de un Cliente*/
 typedef struct Client{
   char * sNombre;
-	char iBoatTable[10][10];		
-	char iPlayTable[10][10];	
+	char iBoatTable[NUMBER_X][NUMBER_Y];		
+	char iPlayTable[NUMBER_X][NUMBER_Y];	
 }stClient;
 /*Estructura de la lista de Conexiones*/
 typedef struct sNodoListas{
@@ -40,8 +41,3 @@ typedef NODOClient * ListasClient;
 stClient MakeClient(char *, char[][NUMBER_Y],  FILE *);
 int ReadClient(FILE *, stClient * ,LISTACLIENT * , int );
 void matrix_init(char [][NUMBER_Y],stClient*);
-/*
-void print_map_line(char[]);
-void print_header() ;
-void print_maps();
-*/
