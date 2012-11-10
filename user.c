@@ -3,7 +3,7 @@
 
 int i,j;
 
-void matrix_init(char my_matrix[][NUMBER_Y], stClient * client)
+void matrix_init(char * matrix, stClient * client)
 {
 	for(i=0;i<NUMBER_X;i++) {
 		for(j=0;j<NUMBER_Y;j++) {
@@ -11,18 +11,28 @@ void matrix_init(char my_matrix[][NUMBER_Y], stClient * client)
 			client->iPlayTable[i][j] = 'a';
 		}
 	}
-
+/*
 	int x,y,i;
+	for(i=1;i<7;i++) 
+	{
+		client->iBoatTable[matrix[i][0]-48][matrix[i][1]-48] = 'x';
+	}
+
 	for(i=2;i<6;i++)
 	{
-		x = (my_matrix[i][0])-48;
-		y = (my_matrix[i][1])-48;
+		printf("sin & x=%s\n",my_matrix[i]);
+		x = atoi(&my_matrix[i][0]);
+		y = atoi(&my_matrix[i][1]);
 		client->iBoatTable[x][y] = 'x';
+		printf("guardando en  x=%d, y=%d\n",x,y);
 	}
+*/
 }
 
-stClient MakeClient(char * nombre, char boatTable[][10],  FILE *fLog)
+stClient MakeClient(char * nombre, char boatTable[],  FILE *fLog)
 {
+	int i;
+
   stClient retval;
 	retval.sNombre=nombre;
 	matrix_init(boatTable,&retval);	   

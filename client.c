@@ -10,6 +10,8 @@
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
+#include <sys/select.h>
+#include <sys/time.h>
 
 #define BUFSIZE 80
 #define PUERTO 10001
@@ -24,22 +26,23 @@
 #define LOG_JUGADA_RECIVIDA 7
 #define LOG_CONEXION_SERVER 1
 
-int main(int argc, char** argv)
+int main(int argc, char* argv[])
 {
   char* sDireccion;
   char* sPuerto;
-  int Descriptor, sockClient;
-  struct sockaddr_in addrListen, addrClient;
+  int sockClient;
+  struct sockaddr_in addrClient;
   FILE* fConfiguracion;
   FILE* fLog;
 	char * sCodRespuesta;
 	char sMsgRespuesta[BUFSIZE];
   fLog=ArchivoLog("./client.log");
   fConfiguracion=AbrirArchivo("./client.conf");
-  Descriptor=MakeSocket(AF_INET,SOCK_STREAM,0);
+  sockClient=MakeSocket(AF_INET,SOCK_STREAM,0);
 	sockClient=MakeSocket(AF_INET,SOCK_STREAM,0);
   sDireccion=malloc(80);
   sPuerto=malloc(6);
+	int i,j;
 
 	if(argc != 7)
 	{
@@ -48,9 +51,21 @@ int main(int argc, char** argv)
 	}
 
 	printf("Mostrando el tablero de %s:\n", argv[1]);
+	//Inicializo el cliente
+	stClient this;
 
-
-	stClient this = MakeClient(argv[1], argv[2],fLog);
+	this.sNombre=argv[1];
+	for(i=0;i<10;i++) {
+		for(j=0;j<10;j++) {
+			this.iBoatTable[i][j] = 'a';
+			this.iPlayTable[i][j] = 'a';
+		}
+	}
+	for(i=1;i<argc;i++) 
+	{
+		this.iBoatTable[argv[i][0]-48][argv[i][1]-48] = 'x';
+	}
+	//Muestro el mapa mio y del juego
 	print_maps(this.iBoatTable,this.iPlayTable);
 
   if(LeerValor(fConfiguracion,"DIRECCION",sDireccion)==1)
@@ -76,19 +91,19 @@ int main(int argc, char** argv)
   }
   LimpiarCRLF(sDireccion);
 
-  if (connect (Descriptor, (struct sockaddr *)&addrClient, sizeof (addrClient)) == -1)
+  if (connect (sockClient, (struct sockaddr *)&addrClient, sizeof (addrClient)) == -1)
   {
     perror("Connect");
     Log(LOG_MENSAJE_EXTRA,fLog,sMsg_ErrorConexionDatos);
     exit (EXIT_FAILURE);
   }
 
-  printf("Cliente Battleship V 0.1\n-----------");
+  printf("Cliente Battleship V 1.1\n-----------");
   printf("\nConectando con el servidor en %s:%s\n",sDireccion,sPuerto);
 
   Log(LOG_CONEXION_SERVER,fLog,"");
   printf("\nConexion con el Servidor aceptada\n-----------------\n");
-  if(ReadSocket(Descriptor,sMsgRespuesta,50,0)<0)
+  if(ReadSocket(sockClient,sMsgRespuesta,50,0)<0)
   {
   	perror("ReadSocket");
 		Log(LOG_MENSAJE_EXTRA,fLog,"Error logeandose al servidor\n");
@@ -100,8 +115,8 @@ int main(int argc, char** argv)
 		Log(LOG_MENSAJE_EXTRA,fLog,"Login: Error en la respuesta de USER\n");
 		exit (EXIT_FAILURE);
   }
-
-	ControlDeConexion(sockClient,sDireccion,sCodRespuesta,fConfiguracion);
+	printf("%s",sMsg_Bienvenida);
+	ControlDeConexion(sockClient,sDireccion,sCodRespuesta,fLog,&this);
 
   fclose(fLog);
   return EXIT_SUCCESS;
@@ -151,14 +166,14 @@ void ComandoInvalido(void)
 
 int EvaluarComando(char* sComando)
 {
+	if(sComando == NULL)
+		sComando = " ";
   Mayusculas(sComando);
 
   if(strcmp(sComando,"LIST")==0)
     return 1;
-
   if(strcmp(sComando,"GAME")==0)
     return 2;
-
   if(strcmp(sComando,"PLAY")==0)
     return 3;
 	if(strcmp(sComando,"QUIT")==0)
@@ -168,47 +183,72 @@ int EvaluarComando(char* sComando)
 }
 
 
-void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuerto,FILE* fConfiguracion)
+void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuerto,FILE* fLog, stClient *cliente)
 {
 	char* command;
 	char buffer[20];
 	int codigoComando;
-
-  fclose(fConfiguracion);
-  fConfiguracion=AbrirArchivo("./client.conf");
-	
+	fd_set master;
+	struct timeval tv;
+ 
+	//Enviamos al server la informacion de nuestro cliente
+  //WriteSocket(Descriptor,sCommonAnswer,sizeof(&cliente),0);
+	fflush(stdout);
+	fflush(stdin);
+	printf("Jugador>");	
   while(1)
   {
-		fflush(stdout);
-		fflush(stdin);
-		printf("Jugador>");
-		gets(buffer);
-    if(buffer >0)
-    {
-      command=strtok(buffer," ");
-      codigoComando=EvaluarComando(command);
-      switch(codigoComando)
-      {
-        case 1: /*LIST*/
-							printf("Queres listar los usuarios\n");
-              command=strtok(NULL," ");
-              break;
-        case 2: /*GAME*/
-							printf("Queres mostrar el juego\n");
-							command=strtok(NULL," ");
-              break;
-        case 3: /*PLAY*/
-							printf("Queres jugar con X\n");
-              command=strtok(NULL," ");
-              break;
-				case 4: /*QUIT*/
-							printf("%s",sMsg_Quit);
-							CloseSocket(Descriptor);
-							exit (EXIT_SUCCESS);
-        default: /*Comando invalido*/
-              ComandoInvalido();
-              break;
-      }
-    }
+		Log(LOG_MENSAJE_EXTRA,fLog,"Esperando comando del jugador\n");	
+		FD_ZERO(&master);
+		FD_SET(Descriptor, &master);
+		FD_SET(0, &master);
+		tv.tv_sec=3;
+		tv.tv_usec=0;
+		
+		if(select(Descriptor+1, &master, NULL, NULL, &tv) == -1){
+			perror("select");
+			exit(1);
+		}
+		if(FD_ISSET(0,&master)) //Se presiono el teclado (ENTER)
+		{
+			//El usuario esta tratando de scribir
+			gets(buffer);
+			if(buffer >0)
+			{
+				command=strtok(buffer," ");
+				codigoComando=EvaluarComando(command);
+				switch(codigoComando)
+				{
+				  case 1: /*LIST*/
+								printf("Queres listar los usuarios\n");
+				        command=strtok(NULL," ");
+				        break;
+				  case 2: /*GAME*/
+								printf("Queres mostrar el juego\n");
+								command=strtok(NULL," ");
+				        break;
+				  case 3: /*PLAY*/
+								printf("Queres jugar con X\n");
+				        command=strtok(NULL," ");
+				        break;
+					case 4: /*QUIT*/
+								printf("%s",sMsg_Quit);
+								CloseSocket(Descriptor);
+								exit (EXIT_SUCCESS);
+				  default: /*Comando invalido*/
+				        ComandoInvalido();
+				        break;
+				}
+			}
+			printf("Jugador>");	
+		}
+		if(FD_ISSET(Descriptor, &master)){
+			if(ReadSocket(Descriptor,command,50,0)<0)
+			{
+				perror("ReadSocket");
+				Log(LOG_MENSAJE_EXTRA,fLog,"Error logeandose al servidor\n");
+				exit (EXIT_FAILURE);
+			}
+		}
   }
 }

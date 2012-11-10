@@ -91,3 +91,13 @@ ssize_t WriteSocket(int socketToRead, void *buffer, size_t bufferLenght, int fla
     return retval;
 }
 
+void AllowMultipleConection(int socketToListen)
+{
+	int opt = 1;
+	if(setsockopt(socketToListen, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt)) < 0 )
+	{
+		perror("setsockopt");
+		exit(EXIT_FAILURE);
+	}
+}
+

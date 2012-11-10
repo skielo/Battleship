@@ -41,6 +41,8 @@ int main(int argc, char** argv)
   sockListen=MakeSocket(AF_INET,SOCK_STREAM,0);
   sDireccion=malloc(80);
   sPuerto=malloc(6);
+
+
   if(LeerValor(fConfiguracion,"DIRECCION",sDireccion)==1)
   {
     printf("Error al leer la direccion\n");
@@ -52,6 +54,10 @@ int main(int argc, char** argv)
     printf("Error al leer el puerto\n");
     exit (EXIT_FAILURE);
   }
+
+	//Habilito al servidor a recib ir multiples conexiones
+	AllowMultipleConection(sockListen);
+
   bzero(&addrListen,sizeof(addrListen));
   addrListen.sin_family = AF_INET;
   addrListen.sin_port = htons(atoi(sPuerto));
@@ -73,9 +79,10 @@ int main(int argc, char** argv)
     Log(LOG_MENSAJE_EXTRA,fLog,"Error Escuchando En La Conexion\n");
     exit (EXIT_FAILURE);
   }
+
 	GenerarPuerto(atoi(sPuerto));
   clilen=sizeof(addrClient);
-  printf("Servidor de juego V 0.1\n-----------");
+  printf("Servidor de juego V 1.0\n-----------");
   printf("\nEsperando conexiones de clientes en %s:%s\n",sDireccion,sPuerto);
 	printf("--------------------------------------------------------------\n");
   while(1)
@@ -88,10 +95,11 @@ int main(int argc, char** argv)
 
 		//Enviamos la confirmacion al cliente y le decimos donde debe conectarse
     WriteSocket(sockClient,sCommonAnswer,strlen(sCommonAnswer),0);
-
-		param=ArmarParametros(sockClient,sDireccion,sPuerto);
+		Log(LOG_MENSAJE_EXTRA,fLog,"Se envio al cliente la respuesta comun");
+		param=ArmarParametros(sockClient,sDireccion,sPuerto,fLog);
+		
 		iThread = pthread_create(&idChild, NULL, ConexionControl, &param);
-
+		Log(LOG_MENSAJE_EXTRA,fLog,"Se inicializo el thread y ahora se esperan mas conexiones");
     if(iThread != 0)
     {
 			perror("THREAD");
@@ -149,7 +157,7 @@ int GenerarPuerto(int iPuerto)
 
 
 /*Arma los parametros para iniciar el nuevo thread*/
-stParam ArmarParametros(int sockClient,char* sDireccionIP,char* sPuerto)
+stParam ArmarParametros(int sockClient,char* sDireccionIP,char* sPuerto, FILE * fLog)
 {
 	//printf("socket: %d, ip: %s, puerto: %s\n",sockClient, sDireccionIP, sPuerto);
 	stParam retval;
@@ -157,11 +165,9 @@ stParam ArmarParametros(int sockClient,char* sDireccionIP,char* sPuerto)
   memset(retval.sPuerto,(unsigned char)sPuerto, 1);
 	retval.sDireccionIP = malloc(sizeof(sDireccionIP));
   strcpy(retval.sDireccionIP, sDireccionIP);
+	retval.fLog = fLog;
 	return retval;
 }
-
-// BindSocket: Address already in use
-// socket servidor seterarle un flag SO_REUSEADDR setsockopt
 
 
 /*Esta funcion se encarga de manejar la conexion con el cliente, esperando
@@ -179,6 +185,7 @@ void * ConexionControl(void * param)
   {
 		fflush(stdout);
     bzero(buf,BUFSIZE);
+		Log(LOG_MENSAJE_EXTRA,fLog,"Esperando mensajes del cliente");
     bytesRead=ReadSocket(p->sockClient,buf,BUFSIZE,0);
     if(bytesRead >0)
     {
@@ -234,4 +241,24 @@ void Quit(int sockClient)
   WriteSocket(sockClient,sMsg_Quit,strlen(sMsg_Quit),0);
   Log(LOG_CIERRE_SOCKET_ACCEPT,fLog,"");
   fclose(fLog);
+}
+
+/* Objetivo: Esta funcion, arma el nodo del tipo sAuxLista lo inserta en 1era posicion y 
+devuelve el puntero a ListaConexion */
+int InsertarListaConexion( int ifdsock, stClient * sClient, int iDatos, pNodoConexion *Lista)
+{
+    pNodoConexion sAux;
+
+    sAux=malloc(sizeof(pNodoConexion));
+    if(sAux== NULL) 
+       return -1;         /*Retorno -1 si hubo problemas con la memoria*/
+	   
+    /*Lleno la estructura con los datos*/   
+    sAux->iSock = ifdsock;
+    sAux->sClient = sClient;
+    sAux->sig = *Lista;
+
+    *Lista = sAux;
+    
+    return 1;               /*Retorno 1 si pude insertarlo bien*/
 }

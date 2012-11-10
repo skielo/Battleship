@@ -15,3 +15,4 @@ int AcceptSocket(int , struct sockaddr *, socklen_t *);
 int CloseSocket(int );
 ssize_t ReadSocket(int , void *, size_t , int );
 ssize_t WriteSocket(int , void *, size_t , int );
+void AllowMultipleConection(int);

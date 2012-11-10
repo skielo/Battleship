@@ -13,4 +13,4 @@ user:
 print:
 	gcc -Wall -c funciones_print.c
 client:
-	gcc -Wall client.c funciones_red.o configuracion.o log.o user.o funciones_print.o -o client
+	gcc -ggdb -Wall client.c funciones_red.o configuracion.o log.o user.o funciones_print.o -o client

@@ -38,6 +38,6 @@ typedef NODOListas * ListasNodos;
 typedef NODOClient * LISTACLIENT;
 typedef NODOClient * ListasClient;
 
-stClient MakeClient(char *, char[][NUMBER_Y],  FILE *);
+stClient MakeClient(char *, char[],  FILE *);
 int ReadClient(FILE *, stClient * ,LISTACLIENT * , int );
-void matrix_init(char [][NUMBER_Y],stClient*);
+void matrix_init(char [],stClient*);
