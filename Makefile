@@ -1,5 +1,5 @@
 all:  red log configuracion user print client
-	gcc -ggdb -Wall server.c funciones_red.o configuracion.o log.o user.o -lpthread -o server
+	gcc -ggdb -g -Wall server.c funciones_red.o configuracion.o log.o user.o -lpthread -o server
 clean:  
 	rm *.o server client
 red:	
@@ -13,4 +13,4 @@ user:
 print:
 	gcc -Wall -c funciones_print.c
 client:
-	gcc -ggdb -Wall client.c funciones_red.o configuracion.o log.o user.o funciones_print.o -o client
+	gcc -ggdb -g -Wall client.c funciones_red.o configuracion.o log.o user.o funciones_print.o -o client

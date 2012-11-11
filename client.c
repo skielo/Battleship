@@ -116,7 +116,7 @@ int main(int argc, char* argv[])
 		exit (EXIT_FAILURE);
   }
 	printf("%s",sMsg_Bienvenida);
-	ControlDeConexion(sockClient,sDireccion,sCodRespuesta,fLog,&this);
+	ControlDeConexion(sockClient,sDireccion,sCodRespuesta,fLog,this);
 
   fclose(fLog);
   return EXIT_SUCCESS;
@@ -183,22 +183,28 @@ int EvaluarComando(char* sComando)
 }
 
 
-void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuerto,FILE* fLog, stClient *cliente)
+void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuerto,FILE* fLog, stClient cliente)
 {
 	char* command;
 	char buffer[20];
 	int codigoComando;
 	fd_set master;
 	struct timeval tv;
- 
+	int bytesSent;
+
 	//Enviamos al server la informacion de nuestro cliente
-  //WriteSocket(Descriptor,sCommonAnswer,sizeof(&cliente),0);
+  bytesSent=WriteSocket(Descriptor,&cliente,sizeof(cliente),0);
+  if(bytesSent != sizeof(cliente))
+  {
+    perror("ReadSocket");
+    exit (EXIT_FAILURE);
+	}
+
 	fflush(stdout);
 	fflush(stdin);
 	printf("Jugador>");	
   while(1)
-  {
-		Log(LOG_MENSAJE_EXTRA,fLog,"Esperando comando del jugador\n");	
+  {	
 		FD_ZERO(&master);
 		FD_SET(Descriptor, &master);
 		FD_SET(0, &master);
@@ -211,6 +217,7 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuer
 		}
 		if(FD_ISSET(0,&master)) //Se presiono el teclado (ENTER)
 		{
+			Log(LOG_MENSAJE_EXTRA,fLog,"Esperando comando del jugador\n");
 			//El usuario esta tratando de scribir
 			gets(buffer);
 			if(buffer >0)

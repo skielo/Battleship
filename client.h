@@ -1,6 +1,6 @@
 #include<stdio.h>
 
-void ControlDeConexion(int ,const char * ,const char * ,FILE *, stClient *);
+void ControlDeConexion(int ,const char * ,const char * ,FILE *, stClient );
 int GenerarPuerto(int );
 int EvaluarComando(char * );
 void ComandoInvalido(void);

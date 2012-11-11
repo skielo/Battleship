@@ -8,9 +8,6 @@ typedef struct Parametros{
 	FILE * fLog;	
 }stParam;
 
-typedef NODOClient * pNodoConexion;
-typedef stClient * pCliente;
-
 void LimpiarCRLF(char *);
 void Mayusculas(char *);
 int GenerarPuerto(int );
@@ -21,4 +18,5 @@ void Quit(int );
 void ComandoInvalido(int );
 void itoa(int , char[]);
 void reverse(char []);
-int InsertarListaConexion( int , stClient * , int , pNodoConexion *);
+int InsertarListaConexion( int , stClient * , ListasClient *);
+int CrearConexionDeControl(char *, char *);
