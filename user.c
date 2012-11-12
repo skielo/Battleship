@@ -34,7 +34,7 @@ stClient MakeClient(char * nombre, char boatTable[],  FILE *fLog)
 	int i;
 
   stClient retval;
-	retval.sNombre=nombre;
+	strcpy(retval.sNombre,nombre);
 	matrix_init(boatTable,&retval);	   
   Log(LOG_MENSAJE_EXTRA,fLog,"Nueva estructura cliente creada");
   

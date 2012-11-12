@@ -18,5 +18,5 @@ void Quit(int );
 void ComandoInvalido(int );
 void itoa(int , char[]);
 void reverse(char []);
-int InsertarListaConexion( int , stClient * , ListasClient *);
-int CrearConexionDeControl(char *, char *);
+int InsertarListaConexion( int , stClient *, ListasClient *, int , char * );
+void ManejarConexionConectada(int , FILE * );

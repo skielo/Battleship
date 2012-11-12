@@ -153,7 +153,6 @@ void Mayusculas(char* sCadena)
 int GenerarPuerto(int iPuerto)
 {
 	static int Puerto;
-
 	if(iPuerto >0)
 	{
 		Puerto=iPuerto;
@@ -171,12 +170,15 @@ int GenerarPuerto(int iPuerto)
 stParam ArmarParametros(int sockClient,char* sDireccionIP,char* sPuerto, FILE * fLog)
 {
 	//printf("socket: %d, ip: %s, puerto: %s\n",sockClient, sDireccionIP, sPuerto);
+	//printf("socket: %d, ip: %s, puerto: %s\n",retval.sockClient, retval.sDireccionIP, retval.sPuerto);
 	stParam retval;
 	retval.sockClient=sockClient;
-  memset(retval.sPuerto,(unsigned char)sPuerto, 1);
+	retval.sPuerto = malloc(sizeof(sPuerto));
+	strcpy(retval.sPuerto,sPuerto);
 	retval.sDireccionIP = malloc(sizeof(sDireccionIP));
   strcpy(retval.sDireccionIP, sDireccionIP);
 	retval.fLog = fLog;
+
 	return retval;
 }
 
@@ -186,23 +188,27 @@ comandos desde el mismo y evaluandolos*/
 void * ConexionControl(void * param)
 {
 	stParam * p = (stParam *)param;
-	int bytesRead, i;
-	char buf[BUFSIZE];
-	char* command;
-	int codigoComando, sockControl;
 	stClient cliente;
 	fd_set fdControl;
 	struct timeval tv;
+	//Variables para la conexion de control
+	int master_socket , new_socket , client_socket[3] , max_clients = 3 , s, newPort=0,bytesRead, i;
+	struct sockaddr_in address;
+	socklen_t addrlen;
 
-	//Inicio la conexion de control con el cliente
-	//sockControl = CrearConexionDeControl(p->sDireccionIP,p->sPuerto);
 	//Recibo los datos que me va a mandar el cliente sobre el mismo
 	bytesRead=ReadSocket(p->sockClient,&cliente,sizeof(stClient),0);
+
   if(bytesRead <0)
   {
     perror("ReadSocket");
     exit (EXIT_FAILURE);
 	}
+	Log(LOG_MENSAJE_EXTRA,p->fLog,"Recibo los datos que me va a mandar el cliente sobre el mismo\n");
+	printf("Se conecto: %s",cliente.sNombre);
+	//Genero el nuevo puerto donde deben conectarse
+	newPort = GenerarPuerto(-1);
+	//printf("conectando en %s:%d\n", p->sDireccionIP,newPort);
 
 #ifdef MUTEX
 	/* Se espera y se bloquea el mutex */
@@ -210,43 +216,108 @@ void * ConexionControl(void * param)
 #endif
 
 	//Insert el nuevo cliente en la lista de conexiones compartida		
-	InsertarListaConexion(p->sockClient, &cliente, lConexiones);
+	if(InsertarListaConexion(p->sockClient, &cliente, lConexiones, newPort, p->sDireccionIP) < 0)
+	{
+    perror("Lista de conexion");
+    exit (EXIT_FAILURE);
+	}
 
 #ifdef MUTEX
 	/* Se desbloquea el mutex */
 	pthread_mutex_unlock (&mutexBuffer);
 #endif
+	Log(LOG_MENSAJE_EXTRA,p->fLog,"Insert el nuevo cliente en la lista de conexiones compartida\n");
+	Log(LOG_MENSAJE_EXTRA,p->fLog,"Inicio la conexion de control para comunciarme con el cliente y con otros server que quieran jugar con este cliente\n");
 
-  command=malloc(5);
-  while(1)
+
+	/*Inicio la conexion de control para comunciarme con el cliente y con 
+	otros server que quieran jugar con este cliente*/
+	
+	//inicializamos todos client_socket[] en 0
+	for (i = 0; i < max_clients; i++) 
+	{
+		client_socket[i] = 0;
+	}
+	//Agrego al cliente que ya esta conectado
+	client_socket[0]=p->sockClient;
+
+	master_socket=MakeSocket(AF_INET,SOCK_STREAM,0);
+	AllowMultipleConection(master_socket);
+  bzero(&address,sizeof(address));
+  address.sin_family = AF_INET;
+  address.sin_port = htons(newPort);
+
+  if(inet_pton(AF_INET,p->sDireccionIP,&address.sin_addr) <0)
   {
-		fflush(stdout);
-    bzero(buf,BUFSIZE);
-		Log(LOG_MENSAJE_EXTRA,p->fLog,"Esperando mensajes del cliente");
-    bytesRead=ReadSocket(p->sockClient,buf,BUFSIZE,0);
-    if(bytesRead >0)
-    {
-      LimpiarCRLF(buf);
-      command=strtok(buf," ");
-			printf("Comando: %s \n", command);
-      codigoComando=EvaluarComando(command);
-      switch(codigoComando)
-      {
-        case 1: /*LIST*/
-              continue;
-        case 2: /*GAME*/
-              continue;
-				case 3: /*PLAY*/
-							continue;
-        case 4: /*QUIT*/
-              Quit(p->sockClient); /*Salir directamente*/
-              return 0;
-        default: /*Comando invalido*/
-              ComandoInvalido(p->sockClient);
-              break;
-      }
-    }
+    perror("inet_pton");
+    exit (EXIT_FAILURE);
   }
+  LimpiarCRLF(p->sDireccionIP);
+  if(BindSocket(master_socket,(struct sockaddr*)&address,sizeof(address)) < 0)
+  {
+    perror("BindSocket");
+    exit (EXIT_FAILURE);
+  }
+  if(ListenSocket(master_socket,10)<0)
+  {
+    perror("ListenSocket");
+    exit (EXIT_FAILURE);
+  }	
+	addrlen = sizeof(address);
+	Log(LOG_MENSAJE_EXTRA,p->fLog,"Comienza el control para saber cuando alguien necesita intercambiar datos con el server\n");
+	//Comienza el control para saber cuando alguien necesita intercambiar datos con el server
+	//printf("Ya iniciamos el nuevo puerto de escucha sock: %d\n", master_socket);
+	fflush(stdout);
+	while(1) 
+	{
+		//Limpio el controlador de sockets
+		FD_ZERO(&fdControl);
+		FD_SET(master_socket, &fdControl);
+		tv.tv_sec=3;
+		tv.tv_usec=0;
+		
+		//agrego los clientes al controlador
+		for ( i = 0 ; i < max_clients ; i++) 
+		{
+			s=client_socket[i];
+			if(s>0)
+			{
+				FD_SET(s,&fdControl);
+			}
+		}
+		
+		if(select(max_clients+3, &fdControl, NULL, NULL, &tv) == -1){
+			perror("select");
+			exit(1);
+		}
+
+		//Si pasa algo en el master_socket es una conexion nueva entrante
+		if (FD_ISSET(master_socket, &fdControl)) 
+		{
+			Log(LOG_MENSAJE_EXTRA,p->fLog,"Si pasa algo en el master_socket es una conexion nueva entrante\n");
+			new_socket=AcceptSocket(master_socket,(struct sockaddr*)&address,&addrlen);
+			//Agrego el nuevo socket a la lista de sockets conectados
+			for (i = 0; i < max_clients; i++) 
+			{
+				s = client_socket[i];
+				if (s == 0)
+				{
+					client_socket[i] = new_socket;
+					i = max_clients;
+				}
+			}
+		}
+		//Ahora controlo dentro del array de conexiones si el cliente o el server conectado quieren hablarme
+		for (i = 0; i < max_clients; i++) 
+		{
+			s=client_socket[i];
+			if (FD_ISSET(s,&fdControl)) 
+			{
+				Log(LOG_MENSAJE_EXTRA,p->fLog,"Uno de los cliente intenta comunicarse\n");
+				ManejarConexionConectada(s,p->fLog);
+			}
+		}
+	}
 }
 
 /*Evalua el comando recibido para actuar
@@ -282,54 +353,62 @@ void Quit(int sockClient)
 
 /* Objetivo: Esta funcion, arma el nodo del tipo sAuxLista lo inserta en 1era posicion y 
 devuelve el puntero a ListaConexion */
-int InsertarListaConexion( int ifdsock, stClient * sClient, LISTACLIENT *Lista)
+int InsertarListaConexion( int ifdsock, stClient * sClient, LISTACLIENT *Lista, int puerto, char * direccion)
 {
-    LISTACLIENT sAux;
+  LISTACLIENT sAux;
 
-    sAux=malloc(sizeof(LISTACLIENT));
-    if(sAux== NULL) 
-       return -1;         /*Retorno -1 si hubo problemas con la memoria*/
-	   
-    /*Lleno la estructura con los datos*/   
-    sAux->iSock = ifdsock;
-    sAux->sClient = sClient;
-    sAux->sig = *Lista;
+  sAux=malloc(sizeof(LISTACLIENT));
+  if(sAux== NULL) 
+     return -1;         /*Retorno -1 si hubo problemas con la memoria*/
+  //printf("datos: sock %d, puerto %d, ip %s\n",ifdsock, puerto, direccion); 
+  /*Lleno la estructura con los datos*/   
+  sAux->iSock = ifdsock;
+  sAux->sClient = sClient;
+  sAux->sig = *Lista;
+	sAux->sDireccionIP=malloc(sizeof(direccion));
+	strcpy(sAux->sDireccionIP,direccion);
+	sAux->sPuerto=puerto;
 
-    *Lista = sAux;
-    
-    return 1;               /*Retorno 1 si pude insertarlo bien*/
+  *Lista = sAux;
+  
+  return 1;               /*Retorno 1 si pude insertarlo bien*/
 }
 
-/*Crea la conexion de control donde el cliente va a recibir mensajes desde el 
-servidor y los otros threads van a comunicarse*/
-int CrearConexionDeControl(char * direccion, char * puerto)
+/*Esta funciona maneja la conexion con los clientes conectados al thread
+que maneja la comunicacion con el cliente*/
+void ManejarConexionConectada(int socket, FILE * fLog)
 {
-	int socketRet = MakeSocket(AF_INET,SOCK_STREAM,0);;
-  struct sockaddr_in addrListen;
-  socklen_t clilen;
-	
-	AllowMultipleConection(socketRet);
-
-  bzero(&addrListen,sizeof(addrListen));
-  addrListen.sin_family = AF_INET;
-  addrListen.sin_port = htons(GenerarPuerto(atoi(puerto)));
-
-  if(inet_pton(AF_INET,direccion,&addrListen.sin_addr) <0)
+	char buf[BUFSIZE];
+	char* command;
+	int codigoComando,bytesRead;
+  command=malloc(5);
+  while(1)
   {
-    perror("inet_pton");
-    exit (EXIT_FAILURE);
+		fflush(stdout);
+    bzero(buf,BUFSIZE);
+		Log(LOG_MENSAJE_EXTRA,fLog,"Esperando mensajes del cliente");
+    bytesRead=ReadSocket(socket,buf,BUFSIZE,0);
+    if(bytesRead >0)
+    {
+      LimpiarCRLF(buf);
+      command=strtok(buf," ");
+			printf("Comando: %s \n", command);
+      codigoComando=EvaluarComando(command);
+      switch(codigoComando)
+      {
+        case 1: /*LIST*/
+              continue;
+        case 2: /*GAME*/
+              continue;
+				case 3: /*PLAY*/
+							continue;
+        case 4: /*QUIT*/
+              Quit(socket); /*Salir directamente*/
+              return 0;
+        default: /*Comando invalido*/
+              ComandoInvalido(socket);
+              break;
+      }
+    }
   }
-  LimpiarCRLF(direccion);
-  if(BindSocket(socketRet,(struct sockaddr*)&addrListen,sizeof(addrListen)) < 0)
-  {
-    perror("BindSocket");
-    exit (EXIT_FAILURE);
-  }
-  if(ListenSocket(socketRet,10)<0)
-  {
-    perror("ListenSocket");
-    exit (EXIT_FAILURE);
-  }	
-
-	return socketRet;
 }

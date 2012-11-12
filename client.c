@@ -54,7 +54,7 @@ int main(int argc, char* argv[])
 	//Inicializo el cliente
 	stClient this;
 
-	this.sNombre=argv[1];
+	strcpy(this.sNombre,argv[1]);
 	for(i=0;i<10;i++) {
 		for(j=0;j<10;j++) {
 			this.iBoatTable[i][j] = 'a';

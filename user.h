@@ -12,10 +12,11 @@
 
 #define NUMBER_X 10
 #define NUMBER_Y 10
+#define MAXLENGHT 10
 
 /*Estructura de un Cliente*/
 typedef struct Client{
-  char * sNombre;
+  char sNombre[MAXLENGHT];
 	char iBoatTable[NUMBER_X][NUMBER_Y];		
 	char iPlayTable[NUMBER_X][NUMBER_Y];	
 }stClient;
@@ -30,6 +31,9 @@ typedef struct sNodoListas{
 typedef struct sNodoClient{
   int iSock;
   stClient * sClient;
+	/*Direccion y puerto donde deben conectarse con el servidor que atiende al cliente*/
+  char * sDireccionIP;
+	int sPuerto;
   struct sNodoClient * sig;
 }NODOClient;
 
