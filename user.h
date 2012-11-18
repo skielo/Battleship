@@ -12,7 +12,7 @@
 
 #define NUMBER_X 10
 #define NUMBER_Y 10
-#define MAXLENGHT 10
+#define MAXLENGHT 25
 
 /*Estructura de un Cliente*/
 typedef struct Client{
@@ -20,25 +20,27 @@ typedef struct Client{
 	char iBoatTable[NUMBER_X][NUMBER_Y];		
 	char iPlayTable[NUMBER_X][NUMBER_Y];	
 }stClient;
-/*Estructura de la lista de Conexiones*/
-typedef struct sNodoListas{
-  int iSock;
-  char cEstado;
-  int iInfo;
-  struct sNodoListas * sig;
-}NODOListas;
+
+/*Estructura que representa el header de los mensajes*/
+typedef struct Header{
+	char sMensaje[MAXLENGHT];
+	int iCantidad;
+}stHeader;
+
 /*Estructura de la lista de Clientes*/
 typedef struct sNodoClient{
   int iSock;
-  stClient * sClient;
 	/*Direccion y puerto donde deben conectarse con el servidor que atiende al cliente*/
-  char * sDireccionIP;
+  char sDireccionIP[MAXLENGHT];
 	int sPuerto;
+	int iJugando;
+	/*Agrego la info del cliente en esta misma estructura*/
+  char sNombre[MAXLENGHT];
+	char iBoatTable[NUMBER_X][NUMBER_Y];		
+	char iPlayTable[NUMBER_X][NUMBER_Y];	
   struct sNodoClient * sig;
 }NODOClient;
 
-typedef NODOListas * LISTANODO;
-typedef NODOListas * ListasNodos;
 typedef NODOClient * LISTACLIENT;
 typedef NODOClient * ListasClient;
 

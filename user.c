@@ -31,8 +31,6 @@ void matrix_init(char * matrix, stClient * client)
 
 stClient MakeClient(char * nombre, char boatTable[],  FILE *fLog)
 {
-	int i;
-
   stClient retval;
 	strcpy(retval.sNombre,nombre);
 	matrix_init(boatTable,&retval);	   

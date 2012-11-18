@@ -44,4 +44,23 @@ void print_maps(char iBoatTable[][10], char iPlayTable[][10])
 	printf("\t");
 	print_header();
 	printf("\n");
+	fflush(stdout);
+}
+
+void MostrarClienteLista(char * sNombre, int iSock, char * sDireccionIP, int sPuerto, int iJugando) 
+{
+																				
+	printf("------------------------------");
+	printf("|\n");
+	printf("|\tnombre: %s |\n",sNombre);
+	printf("|\tsock: %d |\n",iSock);
+	printf("|\tdire IP: %s |\n",sDireccionIP);
+	printf("|\tPuerto: %d |\n",sPuerto);
+	if(iJugando==1)
+		printf("|\tjugando: SI |\n");
+	else
+		printf("|\tjugando: NO |\n");
+	printf("|\n");
+	printf("------------------------------\n");
+	fflush(stdout);
 }

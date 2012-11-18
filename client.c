@@ -52,7 +52,7 @@ int main(int argc, char* argv[])
 
 	printf("Mostrando el tablero de %s:\n", argv[1]);
 	//Inicializo el cliente
-	stClient this;
+	NODOClient this;
 
 	strcpy(this.sNombre,argv[1]);
 	for(i=0;i<10;i++) {
@@ -65,6 +65,12 @@ int main(int argc, char* argv[])
 	{
 		this.iBoatTable[argv[i][0]-48][argv[i][1]-48] = 'x';
 	}
+  this.iSock=0;
+  bzero(this.sDireccionIP,sizeof(this.sDireccionIP));
+	this.sPuerto=0;
+	this.iJugando=0;
+	this.sig=NULL;
+
 	//Muestro el mapa mio y del juego
 	print_maps(this.iBoatTable,this.iPlayTable);
 
@@ -103,7 +109,8 @@ int main(int argc, char* argv[])
 
   Log(LOG_CONEXION_SERVER,fLog,"");
   printf("\nConexion con el Servidor aceptada\n-----------------\n");
-  if(ReadSocket(sockClient,sMsgRespuesta,50,0)<0)
+
+  if(ReadSocket(sockClient,sMsgRespuesta,6,0)<0)
   {
   	perror("ReadSocket");
 		Log(LOG_MENSAJE_EXTRA,fLog,"Error logeandose al servidor\n");
@@ -115,8 +122,10 @@ int main(int argc, char* argv[])
 		Log(LOG_MENSAJE_EXTRA,fLog,"Login: Error en la respuesta de USER\n");
 		exit (EXIT_FAILURE);
   }
+
 	printf("%s",sMsg_Bienvenida);
-	ControlDeConexion(sockClient,sDireccion,sCodRespuesta,fLog,this);
+	fflush(stdout);
+	ControlDeConexion(sockClient,sDireccion,fLog,this);
 
   fclose(fLog);
   return EXIT_SUCCESS;
@@ -160,8 +169,8 @@ int GenerarPuerto(int iPuerto)
 
 void ComandoInvalido(void)
 {
-	fflush(stdout);
 	printf("%s",sMsg_ComandoInvalido);
+	fflush(stdout);
 }
 
 int EvaluarComando(char* sComando)
@@ -183,26 +192,26 @@ int EvaluarComando(char* sComando)
 }
 
 
-void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuerto,FILE* fLog, stClient cliente)
+void ControlDeConexion(int Descriptor,const char* sDireccionIP,FILE* fLog, NODOClient cliente)
 {
 	char* command;
 	char buffer[20];
 	int codigoComando;
 	fd_set master;
 	struct timeval tv;
-	int bytesSent;
 
+	cliente.iSock=Descriptor;
 	//Enviamos al server la informacion de nuestro cliente
-  bytesSent=WriteSocket(Descriptor,&cliente,sizeof(cliente),0);
-  if(bytesSent != sizeof(cliente))
+  if(WriteSocket(Descriptor,&cliente,sizeof(cliente),0)!=sizeof(cliente))
   {
     perror("ReadSocket");
     exit (EXIT_FAILURE);
 	}
 
-	fflush(stdout);
 	fflush(stdin);
 	printf("Jugador>");	
+	fflush(stdout);
+
   while(1)
   {	
 		FD_ZERO(&master);
@@ -228,11 +237,15 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuer
 				{
 				  case 1: /*LIST*/
 								printf("Queres listar los usuarios\n");
-				        command=strtok(NULL," ");
+								fflush(stdout);
+								/*Se procede a pedir al servidor que nos envie la lista de los usuarios conectados*/	
+								ListarUsuariosDelServidor(Descriptor,fLog);							
 				        break;
 				  case 2: /*GAME*/
-								printf("Queres mostrar el juego\n");
 								command=strtok(NULL," ");
+								printf("Queres iniciar un juego con: %s\n",command);
+								/*Indicamos al servidor el nombre del jugador con el que queremos jugar*/
+								IniciarJuegoCon(Descriptor, command,fLog);
 				        break;
 				  case 3: /*PLAY*/
 								printf("Queres jugar con X\n");
@@ -259,3 +272,59 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,const char* sPuer
 		}
   }
 }
+
+/*Esta funcion se encarga de enviar el pedido al servidor de la lista de usuarios
+conectados, tambien la imprime*/
+void ListarUsuariosDelServidor(int iSocket, FILE * fLog)
+{
+	int cantElement, i=1;
+	ListasClient nodoRecibido;
+	stHeader header;
+	
+ 	//Genero la estructura con el mensansaje
+	strcpy(header.sMensaje,"LIST");
+	//Enviamos al server el pedido del listado
+  if(WriteSocket(iSocket,&header,sizeof(header),0)!=sizeof(header))
+  {
+    perror("ReadSocket");
+    exit (EXIT_FAILURE);
+	}
+	printf("Espero la respuesta de la lista\n");
+  if(ReadSocket(iSocket,&header,sizeof(header),0)<0)
+  {
+  	perror("ReadSocket");
+		Log(LOG_MENSAJE_EXTRA,fLog,"Error logeandose al servidor\n");
+		exit (EXIT_FAILURE);
+  }
+	cantElement=header.iCantidad;
+	printf("La cantidad a recibir es: %d\n",cantElement);
+	while(i<=cantElement)
+	{
+		nodoRecibido=(ListasClient)malloc(sizeof(NODOClient));
+		if(ReadSocket(iSocket,nodoRecibido,sizeof(nodoRecibido),0)<0)
+		{
+			perror("ReadSocket");
+			Log(LOG_MENSAJE_EXTRA,fLog,"Error logeandose al servidor\n");
+			exit (EXIT_FAILURE);
+		}
+		MostrarClienteLista(nodoRecibido->sNombre, nodoRecibido->iSock, nodoRecibido->sDireccionIP, nodoRecibido->sPuerto, nodoRecibido->iJugando);
+		i++;
+	}
+}
+
+void IniciarJuegoCon(int iSocket, char * sNombre,FILE * fLog)
+{
+	stHeader header;
+	
+ 	//Genero la estructura con el mensansaje
+	strcpy(header.sMensaje,"GAME ");
+	strcat(header.sMensaje,sNombre);
+	//Enviamos al server el pedido del listado
+  if(WriteSocket(iSocket,&header,sizeof(header),0)!=sizeof(header))
+  {
+    perror("ReadSocket");
+    exit (EXIT_FAILURE);
+	}
+}
+
+
