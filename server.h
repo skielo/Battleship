@@ -8,6 +8,14 @@ typedef struct Parametros{
 	FILE * fLog;	
 }stParam;
 
+struct shared_use_st {
+	int used;
+	char sUser[10];
+	char mensaje[10];
+	char sDireccion[25];
+	int iPuerto;
+}; 
+
 void LimpiarCRLF(char *);
 void Mayusculas(char *);
 int GenerarPuerto(int );
@@ -26,3 +34,4 @@ int maximoValor(int[]);
 void MostrarLista(LISTACLIENT );
 int EstaEnLista(char *);
 void IniciarJuegoConWorker(char *, FILE *);
+void EnviarInicioJuegoCliente(int, FILE *);

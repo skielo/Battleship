@@ -199,6 +199,7 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,FILE* fLog, NODOC
 	int codigoComando;
 	fd_set master;
 	struct timeval tv;
+	stHeader header;
 
 	cliente.iSock=Descriptor;
 	//Enviamos al server la informacion de nuestro cliente
@@ -233,6 +234,7 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,FILE* fLog, NODOC
 			{
 				command=strtok(buffer," ");
 				codigoComando=EvaluarComando(command);
+				printf("\nEl comando es: %s\n",command);
 				switch(codigoComando)
 				{
 				  case 1: /*LIST*/
@@ -261,14 +263,19 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,FILE* fLog, NODOC
 				}
 			}
 			printf("Jugador>");	
+			fflush(stdout);
 		}
 		if(FD_ISSET(Descriptor, &master)){
-			if(ReadSocket(Descriptor,command,50,0)<0)
+			printf("El servidor me esta escribiendo\n");
+			if(ReadSocket(Descriptor,&header,sizeof(header),0)<0)
 			{
 				perror("ReadSocket");
-				Log(LOG_MENSAJE_EXTRA,fLog,"Error logeandose al servidor\n");
+				Log(LOG_MENSAJE_EXTRA,fLog,"Iniciamos un juego\n");
 				exit (EXIT_FAILURE);
 			}
+			printf("%s\n", header.sMensaje);
+			printf("Jugador>");	
+			fflush(stdout);
 		}
   }
 }
@@ -322,7 +329,7 @@ void IniciarJuegoCon(int iSocket, char * sNombre,FILE * fLog)
 	//Enviamos al server el pedido del listado
   if(WriteSocket(iSocket,&header,sizeof(header),0)!=sizeof(header))
   {
-    perror("ReadSocket");
+    perror("WriteSocket");
     exit (EXIT_FAILURE);
 	}
 }
