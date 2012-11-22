@@ -200,6 +200,7 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,FILE* fLog, NODOC
 	fd_set master;
 	struct timeval tv;
 	stHeader header;
+	char Oponente[10];
 
 	cliente.iSock=Descriptor;
 	//Enviamos al server la informacion de nuestro cliente
@@ -250,8 +251,18 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,FILE* fLog, NODOC
 								IniciarJuegoCon(Descriptor, command,fLog);
 				        break;
 				  case 3: /*PLAY*/
-								printf("Queres jugar con X\n");
+								printf("Enviando jugada\n");
 				        command=strtok(NULL," ");
+								//memcpy(comandito,command,strlen(command));
+								//Valido que la jugada no este repetida
+								if(cliente.iPlayTable[command[0]-48][command[1]-48] == 'f' || cliente.iPlayTable[command[0]-48][command[1]-48] == 'h')
+								{
+									printf("Esta jugada ya fue realizada, intentalo nuevamente\n");
+									print_maps(cliente.iBoatTable,cliente.iPlayTable);
+									break;
+								}
+								//Enviamos la jugada
+								EnviarJugada(Descriptor, command,&cliente,Oponente,fLog);
 				        break;
 					case 4: /*QUIT*/
 								printf("%s",sMsg_Quit);
@@ -273,11 +284,96 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,FILE* fLog, NODOC
 				Log(LOG_MENSAJE_EXTRA,fLog,"Iniciamos un juego\n");
 				exit (EXIT_FAILURE);
 			}
-			printf("%s\n", header.sMensaje);
-			printf("Jugador>");	
-			fflush(stdout);
+			command=strtok(header.sMensaje," ");
+			codigoComando=EvaluarComando(command);
+			switch(codigoComando)
+			{
+			  case 2: /*GAME*/
+							command=strtok(NULL," ");
+							printf("%s\n", command);
+							printf("Esperando la jugada de mi oponente\n");
+							fflush(stdout);	
+							RecibirJugada(Descriptor, fLog);
+			        break;
+			  case 3: /*PLAY*/
+							strcpy(Oponente,header.sNombre);
+							printf("Ingrese su jugada: Recuerde que la misma debe tener la forma PLAY <xy>\n");
+							printf("Jugador>");	
+							fflush(stdout);
+			        break;
+			  default: /*Comando invalido*/
+			        ComandoInvalido();
+			        break;
+			}
 		}
   }
+}
+
+/*Envio el nodo cliente con la nueva jugada*/
+void EnviarJugada(int iSocket, char * sJugada,NODOClient * cliente,char * sOponente, FILE * fLog)
+{
+	stHeader header;
+	
+	strcpy(header.sMensaje,"PLAY ");
+	strcat(header.sMensaje,sOponente);
+	//Enviamos al server el pedido de PLAY
+  if(WriteSocket(iSocket,&header,sizeof(header),0)!=sizeof(header))
+  {
+    perror("WriteSocket");
+		Log(LOG_MENSAJE_EXTRA,fLog,"Error enviando PLAY\n");
+    exit (EXIT_FAILURE);
+	}
+	//Armar la jugada en el nodo
+	cliente->iPlayTable[sJugada[0]-48][sJugada[1]-48] = 'x';
+	//Envio la jugada que acaba de hacer el cliente
+	if(WriteSocket(iSocket,cliente,sizeof(NODOClient),0)!=sizeof(NODOClient))
+	{
+		perror("WriteSocket");
+		Log(LOG_MENSAJE_EXTRA,fLog,"Error enviando la jugada\n");
+		exit (EXIT_FAILURE);
+	}
+	//Me bloqueo esperando la respuesta de mi jugada
+  if(ReadSocket(iSocket,&header,sizeof(stHeader),0)<0)
+  {
+  	perror("ReadSocket");
+		Log(LOG_MENSAJE_EXTRA,fLog,"Error recibiendo la respuesta de mi jugada\n");
+		exit (EXIT_FAILURE);
+  }
+	if(strcmp(header.sMensaje,"hundido")==0)
+	{
+		cliente->iPlayTable[sJugada[0]-48][sJugada[1]-48] = 'h';
+		printf("Un barco en el oponente fue hundido\n");
+	}
+	else
+	{
+		cliente->iPlayTable[sJugada[0]-48][sJugada[1]-48] = 'f';
+		printf("La jugada no golpeo ningun barco\n");
+	}
+	fflush(stdout);
+}
+
+/*Recibo el nodo cliente con la nueva jugada*/
+void RecibirJugada(int iSocket, FILE * fLog)
+{
+	stHeader header;
+
+	//Me bloqueo esperando la respuesta de mi jugada
+  if(ReadSocket(iSocket,&header,sizeof(stHeader),0)<0)
+  {
+  	perror("ReadSocket");
+		Log(LOG_MENSAJE_EXTRA,fLog,"Error recibiendo la jugada\n");
+		exit (EXIT_FAILURE);
+  }
+	if(strcmp(header.sMensaje,"hundido")==0)
+	{
+		printf("Has perdido uno de tus barcos en la ultima jugada\n");
+		printf("Es tu turno");
+	}
+	else
+	{
+		printf("La jugada no golpeo ningun barco\n");
+	}
+	fflush(stdout);
 }
 
 /*Esta funcion se encarga de enviar el pedido al servidor de la lista de usuarios
@@ -285,7 +381,7 @@ conectados, tambien la imprime*/
 void ListarUsuariosDelServidor(int iSocket, FILE * fLog)
 {
 	int cantElement, i=1;
-	ListasClient nodoRecibido;
+	NODOClient * nodoRecibido;
 	stHeader header;
 	
  	//Genero la estructura con el mensansaje
@@ -297,7 +393,7 @@ void ListarUsuariosDelServidor(int iSocket, FILE * fLog)
     exit (EXIT_FAILURE);
 	}
 	printf("Espero la respuesta de la lista\n");
-  if(ReadSocket(iSocket,&header,sizeof(header),0)<0)
+  if(ReadSocket(iSocket,&header,sizeof(stHeader),0)<0)
   {
   	perror("ReadSocket");
 		Log(LOG_MENSAJE_EXTRA,fLog,"Error logeandose al servidor\n");
@@ -307,8 +403,8 @@ void ListarUsuariosDelServidor(int iSocket, FILE * fLog)
 	printf("La cantidad a recibir es: %d\n",cantElement);
 	while(i<=cantElement)
 	{
-		nodoRecibido=(ListasClient)malloc(sizeof(NODOClient));
-		if(ReadSocket(iSocket,nodoRecibido,sizeof(nodoRecibido),0)<0)
+		nodoRecibido=(NODOClient *)malloc(sizeof(NODOClient));
+		if(ReadSocket(iSocket,nodoRecibido,sizeof(NODOClient),0)<0)
 		{
 			perror("ReadSocket");
 			Log(LOG_MENSAJE_EXTRA,fLog,"Error logeandose al servidor\n");
@@ -319,6 +415,7 @@ void ListarUsuariosDelServidor(int iSocket, FILE * fLog)
 	}
 }
 
+/*Indico a mi servidor que quiero iniciar un juego con un oponente*/
 void IniciarJuegoCon(int iSocket, char * sNombre,FILE * fLog)
 {
 	stHeader header;
@@ -332,6 +429,8 @@ void IniciarJuegoCon(int iSocket, char * sNombre,FILE * fLog)
     perror("WriteSocket");
     exit (EXIT_FAILURE);
 	}
+	printf("Envie correctamente el pedido al server\n");
+	fflush(stdout);
 }
 
 

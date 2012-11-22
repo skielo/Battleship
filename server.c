@@ -312,14 +312,32 @@ void * ConexionControl(void * param)
 	#endif
 		if(sAux!=NULL && sAux->iSock==newSock)
 		{
-			EnviarInicioJuegoCliente(newSock,p->fLog);
-			strcpy(shared_stuff->sUser," ");
-			strcpy(shared_stuff->mensaje," ");
+			if(strcmp(shared_stuff->mensaje,"GAME")==0)
+			{
+				char temp[10];
+				EnviarInicioJuegoCliente(newSock,p->fLog);
+				strcpy(temp,shared_stuff->sUser);
+				strcpy(shared_stuff->sUser,shared_stuff->sOponente);
+				strcpy(shared_stuff->sOponente,temp);
+				strcpy(shared_stuff->mensaje,"PLAY");
+				MarcarClienteJugando(sAux->iSock);
+			}
+			if(strcmp(shared_stuff->mensaje,"PLAY")==0)
+			{
+				//Envio el PLAY a mi cliente
+				EnviarPlayCliente(p->sockClient,shared_stuff->sOponente, p->fLog);
+			}	
+			if(strcmp(shared_stuff->mensaje,"ANS")==0)
+			{
+				//Envio el PLAY a mi cliente
+				EnviarANSCliente(p->sockClient, p->fLog);
+				strcpy(shared_stuff->mensaje,"PLAY");
+			}	
 		}
 		//Ahora controlo dentro del array de conexiones si el cliente o el server conectado quieren hablarme
 		if(FD_ISSET(p->sockClient,&fdControl)) 
 		{
-			//printf("Uno de los cliente intenta comunicarse\n");
+			printf("Uno de los cliente intenta comunicarse\n");
 			//Log(LOG_MENSAJE_EXTRA,p->fLog,"Uno de los cliente intenta comunicarse\n");
 			ManejarConexionConectada(p->sockClient,p->fLog);
 		}
@@ -426,6 +444,32 @@ int EstaEnLista(char * sNombre)
 	return retval;                  /*Retorno 0 si no lo encontro en la lista*/
 }
 
+/*Cambia el estado de un cliente a JUGANDO*/
+void MarcarClienteJugando(int iSock)
+{
+#ifdef MUTEX
+	/* Se espera y se bloquea el mutex */
+	pthread_mutex_lock (&mutexBuffer);
+#endif
+	ListasClient sAux=lConexiones;
+  while(lConexiones!=NULL && sAux->iSock!=0)
+  {
+		if(sAux->iSock==iSock)
+		{
+			sAux->iJugando=1;
+			printf("Se puso al cliente %s a jugar\n",sAux->sNombre);
+			fflush(stdout);
+			//cambio=1;
+			break;
+		}
+    sAux=sAux->sig;
+  }
+#ifdef MUTEX
+	/* Se desbloquea el mutex */
+	pthread_mutex_unlock (&mutexBuffer);
+#endif
+}
+
 /*Muestra la lista de conexiones*/
 void MostrarLista(LISTACLIENT lista)
 {
@@ -483,7 +527,24 @@ void ManejarConexionConectada(int socket, FILE * fLog)
 						if(EstaEnLista(command)==1)
 						{
 							printf("Conectando al worker del usuario: %s\n", command);
-							IniciarJuegoConWorker(command, fLog);
+							/*Busco el nombre de mi usuario*/
+							#ifdef MUTEX
+								/* Se espera y se bloquea el mutex */
+								pthread_mutex_lock (&mutexBuffer);
+							#endif
+							ListasClient sAux=lConexiones;
+							while(lConexiones!=NULL && sAux->iSock!=0)
+							{
+								if(sAux->iSock==socket)
+									break;
+								sAux=sAux->sig;
+							}
+							#ifdef MUTEX
+								/* Se desbloquea el mutex */
+								pthread_mutex_unlock (&mutexBuffer);
+							#endif
+							IniciarJuegoConWorker(command,sAux->sNombre, fLog);
+							MarcarClienteJugando(socket);
 						}
 						else
 						{
@@ -491,6 +552,9 @@ void ManejarConexionConectada(int socket, FILE * fLog)
 						}
             break;
 			case 3: /*PLAY*/
+						//Proceso la jugada
+						command=strtok(NULL," ");
+						RecibirJugadaCliente(socket,command, fLog);
 						break;
       case 4: /*QUIT*/
             Quit(socket); /*Salir directamente*/
@@ -512,6 +576,102 @@ void ManejarConexionConectada(int socket, FILE * fLog)
   }
 }
 
+/*Recibe y procesa la jugada del cliente*/
+void RecibirJugadaCliente(int iSock,char * sOponente, FILE* fLog)
+{
+	NODOClient * cliente;
+	int i=0, j=0, hundido=0,bytesRead;
+	ListasClient sAux;
+	stHeader header;
+
+	/*Busco el nombre de mi usuario*/
+#ifdef MUTEX
+	/* Se espera y se bloquea el mutex */
+	pthread_mutex_lock (&mutexBuffer);
+#endif
+	sAux=lConexiones;
+	while(lConexiones!=NULL && sAux->iSock!=0)
+	{
+		if(sAux->sNombre==sOponente)
+			break;
+		sAux=sAux->sig;
+	}
+#ifdef MUTEX
+	/* Se desbloquea el mutex */
+	pthread_mutex_unlock (&mutexBuffer);
+#endif
+	//Recibo los datos que me va a mandar el cliente sobre el mismo
+	cliente=(NODOClient *)malloc(sizeof(NODOClient));
+	bytesRead=ReadSocket(iSock,cliente,sizeof(NODOClient),0);
+	if(bytesRead <0)
+	{
+		perror("ReadSocket");
+		exit (EXIT_FAILURE);
+	}
+	for(i=0;i<10;i++) {
+		for(j=0;j<10;j++) {
+			if(cliente->iPlayTable[i][j] == 'x')
+			{
+				if(sAux->iBoatTable[i][j] == 'x')
+				{
+					cliente->iPlayTable[i][j] = 'h';
+					hundido=1;
+				}
+				else
+					cliente->iPlayTable[i][j] = 'f';
+			}
+		}
+	}
+	//Actualizo mi cliente en la lista
+	/*Busco el nombre de mi usuario*/
+#ifdef MUTEX
+	/* Se espera y se bloquea el mutex */
+	pthread_mutex_lock (&mutexBuffer);
+#endif
+	sAux=lConexiones;
+	while(lConexiones!=NULL && sAux->iSock!=0)
+	{
+		if(sAux->sNombre==cliente->sNombre)
+			break;
+		sAux=sAux->sig;
+	}
+#ifdef MUTEX
+	/* Se desbloquea el mutex */
+	pthread_mutex_unlock (&mutexBuffer);
+#endif
+	for(i=0;i<10;i++) {
+		for(j=0;j<10;j++) {
+			if(cliente->iPlayTable[i][j] == 'h')
+				sAux->iPlayTable[i][j] = 'h';
+			if(cliente->iPlayTable[i][j] == 'f')
+				sAux->iPlayTable[i][j] = 'f';
+		}
+	}
+	
+	//Envio el resultado de la jugada a mi cliente y copio la informacion al worker del oponente
+	if(hundido==1)
+	{
+		//Cargo la estructura
+		strcpy(header.sMensaje,"hundido");
+		Log(LOG_MENSAJE_EXTRA,fLog,"el resultado de la jugada fue hundido\n");
+	}
+	else
+	{
+		//Cargo la estructura
+		strcpy(header.sMensaje,"fallo");
+		Log(LOG_MENSAJE_EXTRA,fLog,"el resultado de la jugada fue fallido\n");
+	}
+	if(WriteSocket(iSock,&header,sizeof(header),0)!=sizeof(header))
+	{
+	  perror("WriteSocket");
+	  exit (EXIT_FAILURE);
+	}
+	strcpy(shared_stuff->sUser,sOponente);
+	strcpy(shared_stuff->sOponente,cliente->sNombre);
+	strcpy(shared_stuff->mensaje,"ANS");
+	shared_stuff->hundido = hundido;
+}
+
 /*Primero calculo la cantidad de nodos en la lista, luego los envio uno a uno
 al cliente mediante el socket enviado por parametro*/
 void EnviarListaDeUsuarios(int socket, FILE* fLog)
@@ -526,7 +686,7 @@ void EnviarListaDeUsuarios(int socket, FILE* fLog)
 	//Enviamos la cantidad de elementos a transmitir
   if(WriteSocket(socket,&header,sizeof(header),0)!=sizeof(header))
   {
-    perror("ReadSocket");
+    perror("WriteSocket");
     exit (EXIT_FAILURE);
 	}
 	printf("Envie la cantidad de nodos: %d\n", header.iCantidad);
@@ -537,15 +697,14 @@ void EnviarListaDeUsuarios(int socket, FILE* fLog)
 	pthread_mutex_lock (&mutexBuffer);
 #endif
 	ListasClient sAux=lConexiones;
+	printf("Mostrando lo que estoy por enviar\n");
 	while(sAux!=NULL && sAux->iSock!=0)
 	{
-
-		printf("Mostrando lo que estoy por enviar\n");
 		MostrarClienteLista(sAux->sNombre, sAux->iSock, sAux->sDireccionIP, sAux->sPuerto, sAux->iJugando);
 
-		if(WriteSocket(socket,sAux,sizeof(sAux),0)!=sizeof(sAux))
+		if(WriteSocket(socket,sAux,sizeof(NODOClient),0)!=sizeof(NODOClient))
 		{
-		  perror("ReadSocket");
+		  perror("WriteSocket");
 		  exit (EXIT_FAILURE);
 		}
 		sAux=sAux->sig;
@@ -559,7 +718,7 @@ void EnviarListaDeUsuarios(int socket, FILE* fLog)
 
 /*Esta funcion es la encargada de realizar la conexion con el worker que atiene al cliente, en
 esta conexion es la que vamos a utilizar para realizar la comunicacion cliente-cliente*/
-void IniciarJuegoConWorker(char * sNombre, FILE * fLog)
+void IniciarJuegoConWorker(char * sNombre, char * sOponente, FILE * fLog)
 {
 #ifdef MUTEX
 	/* Se espera y se bloquea el mutex */
@@ -581,6 +740,7 @@ void IniciarJuegoConWorker(char * sNombre, FILE * fLog)
 	MostrarClienteLista(sAux->sNombre, sAux->iSock, sAux->sDireccionIP, sAux->sPuerto, sAux->iJugando);
 	strcpy(shared_stuff->sUser,sAux->sNombre);
 	strcpy(shared_stuff->mensaje,"GAME");
+	strcpy(shared_stuff->sOponente,sOponente);
 /*
 	shared_stuff->sDireccion[25];
 	shared_stuff->iPuerto;
@@ -596,16 +756,58 @@ void EnviarInicioJuegoCliente(int socket, FILE* fLog)
 	stHeader header;
 
 	//Cargo la estructura
-	strcpy(header.sMensaje,"Juego iniciado");
+	strcpy(header.sMensaje,"GAME Juego iniciado");
 
-	Log(LOG_MENSAJE_EXTRA,fLog,"Se envia al cliente la cantidad de nodos que tiene la lista\n");
+	Log(LOG_MENSAJE_EXTRA,fLog,"Se inicio un nuevo juego\n");
 	//Enviamos la cantidad de elementos a transmitir
   if(WriteSocket(socket,&header,sizeof(header),0)!=sizeof(header))
   {
     perror("WriteSocket");
     exit (EXIT_FAILURE);
 	}
-	printf("La confirmacion del juego a mi cliente\n");
+	printf("Envie la confirmacion del juego a mi cliente\n");
+	fflush(stdout);
+}
+
+/*Primero calculo la cantidad de nodos en la lista, luego los envio uno a uno
+al cliente mediante el socket enviado por parametro*/
+void EnviarPlayCliente(int socket, char * sOponente, FILE* fLog)
+{
+	stHeader header;
+
+	//Cargo la estructura
+	strcpy(header.sMensaje,"PLAY");
+	strcpy(header.sNombre,sOponente);
+	header.iCantidad=shared_stuff->hundido;
+	Log(LOG_MENSAJE_EXTRA,fLog,"Se envia el PLAY al cliente\n");
+	//Enviamos el play junto al nombre del oponente
+  if(WriteSocket(socket,&header,sizeof(header),0)!=sizeof(header))
+  {
+    perror("WriteSocket");
+    exit (EXIT_FAILURE);
+	}
+	strcpy(shared_stuff->mensaje," ");
+	strcpy(shared_stuff->sUser," ");
+	printf("Esperando la jugada de mi cliente\n");
+	fflush(stdout);
+}
+
+/*Envia al cliente el resultado de la jugada*/
+void EnviarANSCliente(int socket, FILE* fLog)
+{
+	stHeader header;
+
+	//Cargo la estructura
+	strcpy(header.sMensaje,"ANS");
+	header.iCantidad=shared_stuff->hundido;
+	Log(LOG_MENSAJE_EXTRA,fLog,"Se envia el ANS al cliente\n");
+	//Enviamos el ANS
+  if(WriteSocket(socket,&header,sizeof(header),0)!=sizeof(header))
+  {
+    perror("WriteSocket");
+    exit (EXIT_FAILURE);
+	}
+	printf("Envie el resultado de la jugada a mi cliente\n");
 	fflush(stdout);
 }
 

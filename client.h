@@ -10,3 +10,5 @@ void LimpiarCRLF(char * );
 void ListarUsuariosDelServidor(int, FILE *);
 void ListarUsuariosDelServidor(int , FILE *);
 void IniciarJuegoCon(int , char * ,FILE *);
+void RecibirJugada(int , FILE *);
+void EnviarJugada(int , char *,NODOClient *,char*, FILE *);

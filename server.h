@@ -12,8 +12,8 @@ struct shared_use_st {
 	int used;
 	char sUser[10];
 	char mensaje[10];
-	char sDireccion[25];
-	int iPuerto;
+	char sOponente[10];	
+	int hundido;
 }; 
 
 void LimpiarCRLF(char *);
@@ -33,5 +33,10 @@ void ManejarConexionConectada(int , FILE * );
 int maximoValor(int[]);
 void MostrarLista(LISTACLIENT );
 int EstaEnLista(char *);
-void IniciarJuegoConWorker(char *, FILE *);
+void IniciarJuegoConWorker(char *,char *, FILE *);
 void EnviarInicioJuegoCliente(int, FILE *);
+void MarcarClienteJugando(int );
+void EnviarPlayCliente(int , char *, FILE* );
+void RecibirJugadaCliente(int ,char *, FILE*);
+void EnviarANSCliente(int , FILE*);
+
