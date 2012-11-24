@@ -23,6 +23,8 @@ void Log(int TipoEvento,FILE *archlog,const char* sMensaje){
     fecha[strlen(fecha)-1]='\0';
     fprintf(archlog,"%s : ",fecha);
     fprintf(archlog,"PID: %d | ",(int)getpid());
+    fprintf(archlog,"TID: %d | ",(int)pthread_self());
+		
         
         switch(TipoEvento){
             case 1:

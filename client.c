@@ -146,8 +146,11 @@ void LimpiarCRLF(char *sCadena)
 void Mayusculas(char* sCadena)
 {
 	int x;
-	for(x=0;x<strlen(sCadena);x++)
-		sCadena[x]=toupper(sCadena[x]);
+	if(strcmp(sCadena," ")!=0)
+	{	
+		for(x=0;x<strlen(sCadena);x++)
+				sCadena[x]=toupper(sCadena[x]);
+	}
 }
 
 /*Genera un nuevo puerto para el cliente que ingreso*/
@@ -187,6 +190,8 @@ int EvaluarComando(char* sComando)
     return 3;
 	if(strcmp(sComando,"QUIT")==0)
 		return 4;
+	if(strcmp(sComando,"ANSW")==0)
+		return 5;
 
   return -1;
 }
@@ -251,7 +256,7 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,FILE* fLog, NODOC
 								IniciarJuegoCon(Descriptor, command,fLog);
 				        break;
 				  case 3: /*PLAY*/
-								printf("Enviando jugada\n");
+								printf("Enviando jugada...\n");
 				        command=strtok(NULL," ");
 								//memcpy(comandito,command,strlen(command));
 								//Valido que la jugada no este repetida
@@ -290,19 +295,36 @@ void ControlDeConexion(int Descriptor,const char* sDireccionIP,FILE* fLog, NODOC
 			{
 			  case 2: /*GAME*/
 							command=strtok(NULL," ");
-							printf("%s\n", command);
 							printf("Esperando la jugada de mi oponente\n");
 							fflush(stdout);	
-							RecibirJugada(Descriptor, fLog);
+							//RecibirJugada(Descriptor, fLog);
 			        break;
 			  case 3: /*PLAY*/
 							strcpy(Oponente,header.sNombre);
+							printf("%s te cedio el control\n", header.sNombre);
 							printf("Ingrese su jugada: Recuerde que la misma debe tener la forma PLAY <xy>\n");
 							printf("Jugador>");	
 							fflush(stdout);
 			        break;
+			  case 5: /*ANSW*/
+							//Me llego el resultado de la jugada de mi rival
+							if(strcmp(header.sMensaje,"ANSW")==0)
+							{
+								if(header.iCantidad==1)
+								{
+									printf("Has perdido uno de tus barcos en la ultima jugada\n");
+									printf("Es tu turno\n");
+								}
+								else
+								{
+									printf("La jugada no golpeo ningun barco\n");
+								}
+							}
+							fflush(stdout);
+			        break;
 			  default: /*Comando invalido*/
 			        ComandoInvalido();
+							printf("el comando: %s\n",header.sMensaje);
 			        break;
 			}
 		}
@@ -325,6 +347,8 @@ void EnviarJugada(int iSocket, char * sJugada,NODOClient * cliente,char * sOpone
 	}
 	//Armar la jugada en el nodo
 	cliente->iPlayTable[sJugada[0]-48][sJugada[1]-48] = 'x';
+	//printf("jungando x=%d, y=%d\n",sJugada[0]-48,sJugada[1]-48);
+	//printf("Mi jugada %c\n",cliente->iPlayTable[sJugada[0]-48][sJugada[1]-48]);
 	//Envio la jugada que acaba de hacer el cliente
 	if(WriteSocket(iSocket,cliente,sizeof(NODOClient),0)!=sizeof(NODOClient))
 	{
@@ -339,6 +363,7 @@ void EnviarJugada(int iSocket, char * sJugada,NODOClient * cliente,char * sOpone
 		Log(LOG_MENSAJE_EXTRA,fLog,"Error recibiendo la respuesta de mi jugada\n");
 		exit (EXIT_FAILURE);
   }
+	printf("el server me dice: %s\n",header.sMensaje);
 	if(strcmp(header.sMensaje,"hundido")==0)
 	{
 		cliente->iPlayTable[sJugada[0]-48][sJugada[1]-48] = 'h';
@@ -364,14 +389,17 @@ void RecibirJugada(int iSocket, FILE * fLog)
 		Log(LOG_MENSAJE_EXTRA,fLog,"Error recibiendo la jugada\n");
 		exit (EXIT_FAILURE);
   }
-	if(strcmp(header.sMensaje,"hundido")==0)
+	if(strcmp(header.sMensaje,"ANSW")==0)
 	{
-		printf("Has perdido uno de tus barcos en la ultima jugada\n");
-		printf("Es tu turno");
-	}
-	else
-	{
-		printf("La jugada no golpeo ningun barco\n");
+		if(header.iCantidad==1)
+		{
+			printf("Has perdido uno de tus barcos en la ultima jugada\n");
+			printf("Es tu turno");
+		}
+		else
+		{
+			printf("La jugada no golpeo ningun barco\n");
+		}
 	}
 	fflush(stdout);
 }

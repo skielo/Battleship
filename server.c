@@ -57,6 +57,13 @@ int main(int argc, char** argv)
   sDireccion=malloc(80);
   sPuerto=malloc(6);
 	lConexiones=malloc(sizeof(NODOClient));
+/*Parte del refactor*/
+	NODOClient * cliente;
+	fd_set fdControl;
+	struct timeval tv;
+	int newPort=0,bytesRead, newSock=0;
+	char newDireccion[MAXLENGHT];
+  ListasClient sAux;
 
 /*Inicio Memoria compartida*/
 	void * shared_memory = (void *) 0;
@@ -96,14 +103,17 @@ int main(int argc, char** argv)
 	//Habilito al servidor a recib ir multiples conexiones
 	AllowMultipleConection(sockListen);
 
-  bzero(&addrListen,sizeof(addrListen));
+  //bzero(&addrListen,sizeof(addrListen));
   addrListen.sin_family = AF_INET;
+	addrListen.sin_addr.s_addr = INADDR_ANY;
   addrListen.sin_port = htons(atoi(sPuerto));
+/*
   if(inet_pton(AF_INET,sDireccion,&addrListen.sin_addr) <0)
   {
     perror("inet_pton");
     exit (EXIT_FAILURE);
   }
+*/
   LimpiarCRLF(sDireccion);
   if(BindSocket(sockListen,(struct sockaddr*)&addrListen,sizeof(addrListen)) < 0)
   {
@@ -128,34 +138,183 @@ int main(int argc, char** argv)
   printf("Servidor de juego V 1.0\n-----------");
   printf("\nEsperando conexiones de clientes en %s:%s\n",sDireccion,sPuerto);
 	printf("--------------------------------------------------------------\n");
+	fflush(stdout);
+	printf("Esperando nuevas conexiones\n");
   while(1)
   {
-/*
-		printf("-----------------Los conectados hasta el momento-----------------\n");
-		MostrarLista(lConexiones);
-*/
-		fflush(stdout);
-		printf("Esperando nuevas conexiones\n");
-    sockClient=AcceptSocket(sockListen,(struct sockaddr*)&addrClient,&clilen);
-    Log(LOG_CONEXION_CLIENTE,fLog,"");
-    printf("\nConexion entrante aceptada\n-----------------\n");
+		/*
+				printf("-----------------Los conectados hasta el momento-----------------\n");
+				MostrarLista(lConexiones);
+		*/
 
-		//Enviamos la confirmacion al cliente y le decimos donde debe conectarse
-    WriteSocket(sockClient,sCommonAnswer,strlen(sCommonAnswer),0);
+		/*ACA EMPIEZA EL REFACTORING QUE ESTOY HACIENDO*/
+		//Limpio el controlador de sockets
+		FD_ZERO(&fdControl);
+		FD_SET(sockListen,&fdControl);
+	#ifdef MUTEX
+		/* Se espera y se bloquea el mutex */
+		pthread_mutex_lock (&mutexBuffer);
+	#endif
+		sAux=lConexiones;
+		while(lConexiones!=NULL && sAux->iSock!=0)
+		{
+			FD_SET(sAux->iSock,&fdControl);
+		  sAux=sAux->sig;
+		}
+	#ifdef MUTEX
+		/* Se desbloquea el mutex */
+		pthread_mutex_unlock (&mutexBuffer);
+	#endif
+		tv.tv_sec=3;
+		tv.tv_usec=0;
+		//printf("el valor maximo: %d\n",maximoValor()+3);
+		int activity=0;
+		int maxVal = maximoValor();
+		if(maxVal<sockClient)
+		{
+			maxVal=sockClient;
+		}
+		activity=select(maxVal+3, &fdControl, NULL, NULL, &tv);
+		if(activity == -1){
+			perror("select");
+			exit(1);
+		}
+		//printf("activity: %d\n",activity);
+		//printf("el socket list:%d\n",sockListen);
+		if (FD_ISSET(sockListen, &fdControl)) 
+		{
+		  sockClient=AcceptSocket(sockListen,(struct sockaddr*)&addrClient,&clilen);
+		  Log(LOG_CONEXION_CLIENTE,fLog,"");
+		  printf("\nConexion entrante aceptada\n-----------------\n");
 
-		Log(LOG_MENSAJE_EXTRA,fLog,"Se envio al cliente la respuesta comun");
-		param=ArmarParametros(sockClient,sDireccion,sPuerto,fLog);
-		
-		iThread = pthread_create(&idChild, NULL, ConexionControl, &param);
-		Log(LOG_MENSAJE_EXTRA,fLog,"Se inicializo el thread y ahora se esperan mas conexiones");
-    if(iThread != 0)
-    {
-			perror("THREAD");
-      fclose(fConfiguracion);
-      fclose(fLog);
-      CloseSocket(sockListen);
-      break;
-    }
+			//Enviamos la confirmacion al cliente y le decimos donde debe conectarse
+		  if(WriteSocket(sockClient,sCommonAnswer,strlen(sCommonAnswer),0)!=strlen(sCommonAnswer))
+			{
+				perror("WriteSocket");
+				exit (EXIT_FAILURE);
+			}
+
+			Log(LOG_MENSAJE_EXTRA,fLog,"Se envio al cliente la respuesta comun");
+
+			cliente=(NODOClient *)malloc(sizeof(NODOClient));
+			//Recibo los datos que me va a mandar el cliente sobre el mismo
+			bytesRead=ReadSocket(sockClient,cliente,sizeof(NODOClient),0);
+
+			if(bytesRead <0)
+			{
+				perror("ReadSocket");
+				exit (EXIT_FAILURE);
+			}
+			Log(LOG_MENSAJE_EXTRA,fLog,"Recibo los datos que me va a mandar el cliente sobre el mismo\n");
+			printf("Se conecto: %s en el socket: %d\n",cliente->sNombre, sockClient);
+			//Genero el nuevo puerto donde deben conectarse
+			newPort = GenerarPuerto(-1);
+			//printf("conectando en %s:%d\n", p->sDireccionIP,newPort);
+			fflush(stdout);
+		#ifdef MUTEX
+			/* Se espera y se bloquea el mutex */
+			pthread_mutex_lock (&mutexBuffer);
+		#endif
+
+			newSock=sockClient;
+			memcpy(newDireccion,sDireccion,strlen(sDireccion));
+			//Insert el nuevo cliente en la lista de conexiones compartida
+			if(InsertarListaConexion(newSock, cliente, &lConexiones, newPort,newDireccion) < 0)
+			{
+				perror("Lista de conexion");
+				exit (EXIT_FAILURE);
+			}
+			MostrarLista(lConexiones);
+
+		#ifdef MUTEX
+			/* Se desbloquea el mutex */
+			pthread_mutex_unlock (&mutexBuffer);
+		#endif
+			Log(LOG_MENSAJE_EXTRA,fLog,"Insert el nuevo cliente en la lista de conexiones compartida\n");
+			Log(LOG_MENSAJE_EXTRA,fLog,"Inicio la conexion de control para comunciarme con el cliente y con otros server que quieran jugar con este cliente\n");
+			//fflush(stdout);
+		}
+		//Reviso la memoria compartida para ver si tengo que escribirle a mi cliente
+		#ifdef MUTEX
+			/* Se espera y se bloquea el mutex */
+			pthread_mutex_lock (&mutexBuffer);
+		#endif
+			sAux=lConexiones;
+			while(sAux)
+			{
+				if(strcmp(sAux->sNombre,shared_stuff->sUser) == 0)
+					break;
+				sAux=sAux->sig;
+			}
+		#ifdef MUTEX
+			/* Se desbloquea el mutex */
+			pthread_mutex_unlock (&mutexBuffer);
+		#endif
+			//printf("El control lo tiene: %s\n",shared_stuff->sUser);
+			if(sAux!=NULL)
+			{
+				if(strcmp(shared_stuff->mensaje,"GAME")==0 && strcmp(sAux->sNombre,shared_stuff->sUser) == 0)
+				{
+					char temp[10];
+					printf("El control lo tiene: %s\n",shared_stuff->sUser);
+					EnviarInicioJuegoCliente(sAux->iSock,fLog);
+					strcpy(temp,shared_stuff->sUser);
+					strcpy(shared_stuff->sUser,shared_stuff->sOponente);
+					strcpy(shared_stuff->sOponente,temp);
+					strcpy(shared_stuff->mensaje,"PLAY");
+					MarcarClienteJugando(sAux->iSock);
+					printf("Se sedio el control a: %s\n",shared_stuff->sUser);
+				}
+				if(strcmp(shared_stuff->mensaje,"PLAY")==0 && strcmp(sAux->sNombre,shared_stuff->sUser) == 0)
+				{
+					//Envio el PLAY a mi cliente
+					printf("Envio el play a : %s, para que juegue contra: %s\n",sAux->sNombre,shared_stuff->sOponente);
+					EnviarPlayCliente(sAux->iSock,shared_stuff->sOponente, fLog);
+				}	
+				if(strcmp(shared_stuff->mensaje,"ANS")==0 && strcmp(sAux->sNombre,shared_stuff->sUser) == 0)
+				{
+					//Envio el ANS a mi cliente
+					printf("Envio el ANS a : %s\n",sAux->sNombre);
+					EnviarANSCliente(sAux->iSock, fLog);
+					strcpy(shared_stuff->sUser,sAux->sNombre);
+					strcpy(shared_stuff->mensaje,"PLAY");
+				}	
+			}		
+		//Ahora controlo dentro del array de conexiones si el cliente o el server conectado quieren hablarme
+		#ifdef MUTEX
+			/* Se espera y se bloquea el mutex */
+			pthread_mutex_lock (&mutexBuffer);
+		#endif
+			sAux=lConexiones;
+			while(lConexiones!=NULL && sAux->iSock!=0)
+			{
+				//printf("controlo el socket %d\n", sAux->iSock);
+				if(FD_ISSET(sAux->iSock,&fdControl)) 
+				{
+					//printf("El socket: %d quiere comunicarse\n",sAux->iSock);
+					//printf("Uno de los cliente intenta comunicarse\n");
+					//Log(LOG_MENSAJE_EXTRA,p->fLog,"Uno de los cliente intenta comunicarse\n");
+					//ManejarConexionConectada(sAux->iSock,fLog);
+					param=ArmarParametros(sAux->iSock,sDireccion,sPuerto,fLog);
+					iThread = pthread_create(&idChild, NULL, ConexionControl, &param);
+					Log(LOG_MENSAJE_EXTRA,fLog,"Se inicializo el thread y ahora se esperan mas conexiones");
+					if(iThread != 0)
+					{
+						perror("THREAD");
+						fclose(fConfiguracion);
+						fclose(fLog);
+						CloseSocket(sockListen);
+						break;
+					}
+				}
+				sAux=sAux->sig;
+			}
+		#ifdef MUTEX
+			/* Se desbloquea el mutex */
+			pthread_mutex_unlock (&mutexBuffer);
+		#endif
+
+/*EL REFACTOR VA HASTA ACA*/
   }
   fclose(fLog);
   return EXIT_SUCCESS;
@@ -202,15 +361,24 @@ int GenerarPuerto(int iPuerto)
 	}
 }
 
-int maximoValor(int lista[])
+int maximoValor()
 {
-	int maximo=0,max_clients = 3, i;
-
-	for (i = 0; i < max_clients; i++) 
-	{
-		if(maximo<lista[i])
-			maximo=lista[i];
-	}
+	int maximo=0;
+  ListasClient sAux;
+	#ifdef MUTEX
+		/* Se espera y se bloquea el mutex */
+		pthread_mutex_lock (&mutexBuffer);
+	#endif
+		sAux=lConexiones;
+		while(lConexiones!=NULL && sAux->iSock!=0)
+		{
+			maximo++;
+		  sAux=sAux->sig;
+		}
+	#ifdef MUTEX
+		/* Se desbloquea el mutex */
+		pthread_mutex_unlock (&mutexBuffer);
+	#endif
 	return maximo;
 }
 
@@ -239,109 +407,10 @@ comandos desde el mismo y evaluandolos*/
 void * ConexionControl(void * param)
 {
 	stParam * p = (stParam *)param;
-	NODOClient * cliente;
-	fd_set fdControl;
-	struct timeval tv;
-	//Variables para la conexion de control
-	int newPort=0,bytesRead, newSock=0;
-	char newDireccion[MAXLENGHT];
-	
-	cliente=(NODOClient *)malloc(sizeof(NODOClient));
-	//Recibo los datos que me va a mandar el cliente sobre el mismo
-	bytesRead=ReadSocket(p->sockClient,cliente,sizeof(NODOClient),0);
 
-  if(bytesRead <0)
-  {
-    perror("ReadSocket");
-    exit (EXIT_FAILURE);
-	}
-	Log(LOG_MENSAJE_EXTRA,p->fLog,"Recibo los datos que me va a mandar el cliente sobre el mismo\n");
-	printf("Se conecto: %s en el socket: %d\n",cliente->sNombre, p->sockClient);
-	//Genero el nuevo puerto donde deben conectarse
-	newPort = GenerarPuerto(-1);
-	//printf("conectando en %s:%d\n", p->sDireccionIP,newPort);
-	fflush(stdout);
-#ifdef MUTEX
-	/* Se espera y se bloquea el mutex */
-	pthread_mutex_lock (&mutexBuffer);
-#endif
-
-	newSock=p->sockClient;
-	memcpy(newDireccion,p->sDireccionIP,strlen(p->sDireccionIP));
-	//Insert el nuevo cliente en la lista de conexiones compartida
-	if(InsertarListaConexion(newSock, cliente, &lConexiones, newPort,newDireccion) < 0)
-	{
-    perror("Lista de conexion");
-    exit (EXIT_FAILURE);
-	}
-	MostrarLista(lConexiones);
-
-#ifdef MUTEX
-	/* Se desbloquea el mutex */
-	pthread_mutex_unlock (&mutexBuffer);
-#endif
-	Log(LOG_MENSAJE_EXTRA,p->fLog,"Insert el nuevo cliente en la lista de conexiones compartida\n");
-	Log(LOG_MENSAJE_EXTRA,p->fLog,"Inicio la conexion de control para comunciarme con el cliente y con otros server que quieran jugar con este cliente\n");
-
-	while(1) 
-	{
-		//Limpio el controlador de sockets
-		FD_ZERO(&fdControl);
-		FD_SET(p->sockClient,&fdControl);
-		tv.tv_sec=3;
-		tv.tv_usec=0;
-		
-		if(select(p->sockClient+1, &fdControl, NULL, NULL, &tv) == -1){
-			perror("select");
-			exit(1);
-		}
-	#ifdef MUTEX
-		/* Se espera y se bloquea el mutex */
-		pthread_mutex_lock (&mutexBuffer);
-	#endif
-		ListasClient sAux=lConexiones;
-		while(sAux)
-		{
-			if(strcmp(sAux->sNombre,shared_stuff->sUser) == 0)
-				break;
-			sAux=sAux->sig;
-		}
-	#ifdef MUTEX
-		/* Se desbloquea el mutex */
-		pthread_mutex_unlock (&mutexBuffer);
-	#endif
-		if(sAux!=NULL && sAux->iSock==newSock)
-		{
-			if(strcmp(shared_stuff->mensaje,"GAME")==0)
-			{
-				char temp[10];
-				EnviarInicioJuegoCliente(newSock,p->fLog);
-				strcpy(temp,shared_stuff->sUser);
-				strcpy(shared_stuff->sUser,shared_stuff->sOponente);
-				strcpy(shared_stuff->sOponente,temp);
-				strcpy(shared_stuff->mensaje,"PLAY");
-				MarcarClienteJugando(sAux->iSock);
-			}
-			if(strcmp(shared_stuff->mensaje,"PLAY")==0)
-			{
-				//Envio el PLAY a mi cliente
-				EnviarPlayCliente(p->sockClient,shared_stuff->sOponente, p->fLog);
-			}	
-			if(strcmp(shared_stuff->mensaje,"ANS")==0)
-			{
-				//Envio el PLAY a mi cliente
-				EnviarANSCliente(p->sockClient, p->fLog);
-				strcpy(shared_stuff->mensaje,"PLAY");
-			}	
-		}
-		//Ahora controlo dentro del array de conexiones si el cliente o el server conectado quieren hablarme
-		if(FD_ISSET(p->sockClient,&fdControl)) 
-		{
-			printf("Uno de los cliente intenta comunicarse\n");
-			//Log(LOG_MENSAJE_EXTRA,p->fLog,"Uno de los cliente intenta comunicarse\n");
-			ManejarConexionConectada(p->sockClient,p->fLog);
-		}
-	}
+	//Luego de iniciado el thread manejo la conexion con el cliente
+	ManejarConexionConectada(p->sockClient,p->fLog);
+	return 0;
 }
 
 /*Evalua el comando recibido para actuar
@@ -489,6 +558,8 @@ void MostrarLista(LISTACLIENT lista)
 			printf("|\tjugando: NO |\n");
 		printf("|\n");
 		printf("------------------------------\n");
+		printf("Mapa:\n");
+		print_maps(sAux->iBoatTable,sAux->iPlayTable);
 		fflush(stdout);
 		sAux=sAux->sig;
 	}
@@ -505,7 +576,7 @@ void ManejarConexionConectada(int socket, FILE * fLog)
 	stHeader header;
 
   bzero(buf,BUFSIZE);
-	Log(LOG_MENSAJE_EXTRA,fLog,"Esperando mensajes del cliente");
+	Log(LOG_MENSAJE_EXTRA,fLog,"Esperando mensajes del cliente\n");
   bytesRead=ReadSocket(socket,&header,sizeof(header),0);//ReadSocket(socket,buf,BUFSIZE,0);
 
   if(bytesRead >0)
@@ -554,6 +625,7 @@ void ManejarConexionConectada(int socket, FILE * fLog)
 			case 3: /*PLAY*/
 						//Proceso la jugada
 						command=strtok(NULL," ");
+						printf("Recibi una jugada de mi cliente, jugando contra: %s\n",command);
 						RecibirJugadaCliente(socket,command, fLog);
 						break;
       case 4: /*QUIT*/
@@ -571,7 +643,7 @@ void ManejarConexionConectada(int socket, FILE * fLog)
   {
   	perror("ReadSocket");
 		fflush(stdout);
-		Log(LOG_MENSAJE_EXTRA,fLog,"Error logeandose al servidor\n");
+		Log(LOG_MENSAJE_EXTRA,fLog,"Error recibiendo mensajes del cliente\n");
 		exit (EXIT_FAILURE);
   }
 }
@@ -590,9 +662,9 @@ void RecibirJugadaCliente(int iSock,char * sOponente, FILE* fLog)
 	pthread_mutex_lock (&mutexBuffer);
 #endif
 	sAux=lConexiones;
-	while(lConexiones!=NULL && sAux->iSock!=0)
+	while(sAux!=NULL && sAux->iSock!=0)
 	{
-		if(sAux->sNombre==sOponente)
+		if(strcmp(sAux->sNombre,sOponente)==0)
 			break;
 		sAux=sAux->sig;
 	}
@@ -629,9 +701,9 @@ void RecibirJugadaCliente(int iSock,char * sOponente, FILE* fLog)
 	pthread_mutex_lock (&mutexBuffer);
 #endif
 	sAux=lConexiones;
-	while(lConexiones!=NULL && sAux->iSock!=0)
+	while(sAux!=NULL && sAux->iSock!=0)
 	{
-		if(sAux->sNombre==cliente->sNombre)
+		if(strcmp(sAux->sNombre,cliente->sNombre)==0)
 			break;
 		sAux=sAux->sig;
 	}
@@ -666,6 +738,7 @@ void RecibirJugadaCliente(int iSock,char * sOponente, FILE* fLog)
 	  perror("WriteSocket");
 	  exit (EXIT_FAILURE);
 	}
+	printf("El control lo tenia: %s, Entregando el control a:%s\n", cliente->sNombre, sOponente);
 	strcpy(shared_stuff->sUser,sOponente);
 	strcpy(shared_stuff->sOponente,cliente->sNombre);
 	strcpy(shared_stuff->mensaje,"ANS");
@@ -756,7 +829,7 @@ void EnviarInicioJuegoCliente(int socket, FILE* fLog)
 	stHeader header;
 
 	//Cargo la estructura
-	strcpy(header.sMensaje,"GAME Juego iniciado");
+	strcpy(header.sMensaje,"GAME");
 
 	Log(LOG_MENSAJE_EXTRA,fLog,"Se inicio un nuevo juego\n");
 	//Enviamos la cantidad de elementos a transmitir
@@ -798,7 +871,7 @@ void EnviarANSCliente(int socket, FILE* fLog)
 	stHeader header;
 
 	//Cargo la estructura
-	strcpy(header.sMensaje,"ANS");
+	strcpy(header.sMensaje,"ANSW");
 	header.iCantidad=shared_stuff->hundido;
 	Log(LOG_MENSAJE_EXTRA,fLog,"Se envia el ANS al cliente\n");
 	//Enviamos el ANS

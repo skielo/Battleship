@@ -30,7 +30,7 @@ int InsertarListaConexion( int , NODOClient *, LISTACLIENT *, int , char * );
 int ContarListaConexion();
 void EnviarListaDeUsuarios(int , FILE*);
 void ManejarConexionConectada(int , FILE * );
-int maximoValor(int[]);
+int maximoValor();
 void MostrarLista(LISTACLIENT );
 int EstaEnLista(char *);
 void IniciarJuegoConWorker(char *,char *, FILE *);
