@@ -11,10 +11,14 @@ void print_map_line(char value[])
 	for(j=0;j<NUMBER_Y;j++) {
 		if (value[j]=='a') {
 			printf(".");
-		} else {
+		} else if(value[j]=='h'){
+				printf("o");
+		}
+		else
+		{			
 			printf("x");
 		}
-			printf(" ");
+		printf(" ");
 	}
 	printf("|");
 }

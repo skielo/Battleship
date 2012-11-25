@@ -347,8 +347,6 @@ void EnviarJugada(int iSocket, char * sJugada,NODOClient * cliente,char * sOpone
 	}
 	//Armar la jugada en el nodo
 	cliente->iPlayTable[sJugada[0]-48][sJugada[1]-48] = 'x';
-	//printf("jungando x=%d, y=%d\n",sJugada[0]-48,sJugada[1]-48);
-	//printf("Mi jugada %c\n",cliente->iPlayTable[sJugada[0]-48][sJugada[1]-48]);
 	//Envio la jugada que acaba de hacer el cliente
 	if(WriteSocket(iSocket,cliente,sizeof(NODOClient),0)!=sizeof(NODOClient))
 	{
@@ -363,7 +361,6 @@ void EnviarJugada(int iSocket, char * sJugada,NODOClient * cliente,char * sOpone
 		Log(LOG_MENSAJE_EXTRA,fLog,"Error recibiendo la respuesta de mi jugada\n");
 		exit (EXIT_FAILURE);
   }
-	printf("el server me dice: %s\n",header.sMensaje);
 	if(strcmp(header.sMensaje,"hundido")==0)
 	{
 		cliente->iPlayTable[sJugada[0]-48][sJugada[1]-48] = 'h';
@@ -374,6 +371,12 @@ void EnviarJugada(int iSocket, char * sJugada,NODOClient * cliente,char * sOpone
 		cliente->iPlayTable[sJugada[0]-48][sJugada[1]-48] = 'f';
 		printf("La jugada no golpeo ningun barco\n");
 	}
+	if(header.iFinPartida==1)
+	{
+		printf("Esta fue la ultima jugada y sali ganador! =D");
+	}
+	//Muestro el mapa mio y del juego
+	print_maps(cliente->iBoatTable,cliente->iPlayTable);
 	fflush(stdout);
 }
 
@@ -399,6 +402,10 @@ void RecibirJugada(int iSocket, FILE * fLog)
 		else
 		{
 			printf("La jugada no golpeo ningun barco\n");
+		}
+		if(header.iFinPartida==1)
+		{
+			printf("Esta fue la ultima jugada y soy el perdedor! =(");
 		}
 	}
 	fflush(stdout);

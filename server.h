@@ -14,6 +14,7 @@ struct shared_use_st {
 	char mensaje[10];
 	char sOponente[10];	
 	int hundido;
+	int iFinPartida;
 }; 
 
 void LimpiarCRLF(char *);

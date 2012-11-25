@@ -26,6 +26,7 @@ typedef struct Header{
 	char sMensaje[MAXLENGHT];
 	int iCantidad;
 	char sNombre[MAXLENGHT];
+	int iFinPartida;
 }stHeader;
 
 /*Estructura de la lista de Clientes*/
